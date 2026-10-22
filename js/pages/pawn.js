@@ -355,7 +355,8 @@
     const c = DB.get('customers', p.customerId) || { name: p.customerName };
     QR.printLabels([{
       qr: Pawn.qrText(p), title: p.pawnNo,
-      lines: [c.name, p.items.length + ' item(s) · Net ' + U.num(p.netWt) + ' g', 'Gross ' + U.num(p.grossWt) + ' g', 'Pawned ' + U.fmtDate(p.date), p.packetNo ? 'Packet ' + p.packetNo : ''],
+      // Short lines so they also fit the small A4 sheet labels
+      lines: [c.name, 'Net ' + U.num(p.netWt) + ' g', 'Gross ' + U.num(p.grossWt) + ' g', p.items.length + ' item' + (p.items.length > 1 ? 's' : ''), 'Dt ' + U.fmtDate(p.date), p.packetNo ? 'Pkt ' + p.packetNo : ''],
     }], 'Packet QR sticker - ' + p.pawnNo);
   }
 

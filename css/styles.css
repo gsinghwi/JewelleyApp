@@ -374,6 +374,9 @@ a.kpi-link:hover { border-color: var(--accent); }
 .st-a4 .st-qr { width: 16mm; height: 16mm; flex: none; }
 .st-a4 .st-text { font-size: 5.5pt; }
 .st-a4 .st-no { font-size: 8pt; }
+.st-text b.st-no.long { white-space: normal; overflow-wrap: anywhere; line-height: 1.05; }
+.st-l50 .st-no.long { font-size: 7pt; }
+.st-a4 .st-no.long { font-size: 6pt; }
 .stickers.roll .sticker:not(:last-child) { break-after: page; page-break-after: always; }
 .stickers.sheet { display: grid; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; column-gap: 2.5mm; }
 .sticker-preview { overflow-x: auto; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }

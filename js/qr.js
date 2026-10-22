@@ -85,7 +85,7 @@
     /* Generic QR labels: [{ qr, title, lines: [] }] on 50x25 mm or A4 sheet stickers */
     label(l, fmt) {
       return '<div class="sticker ' + FORMATS[fmt].cls + '"><div class="st-qr">' + QR.svg(l.qr, 'L') + '</div><div class="st-text">' +
-        '<b class="st-no">' + esc(l.title) + '</b>' + l.lines.filter(Boolean).map((t) => '<span>' + esc(t) + '</span>').join('') + '</div></div>';
+        '<b class="st-no' + (String(l.title).length > 10 ? ' long' : '') + '">' + esc(l.title) + '</b>' + l.lines.filter(Boolean).map((t) => '<span>' + esc(t) + '</span>').join('') + '</div></div>';
     },
 
     printLabels(labels, title) {
