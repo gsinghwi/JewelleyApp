@@ -40,6 +40,7 @@ Demo logins (change them under **Settings → Users**):
 | **Online Payments** (Admin, Manager) | Every online payment attempt: date, gateway payment and order IDs, customer, method (UPI / card network and last 4 digits / bank / wallet), amount, status (paid, authorized, failed, refunded), test or live, and the bill or receipt it belongs to. Filters, CSV export, a detail view, and "Mark refunded" for cancelled bills or unlinked payments. |
 | **Sales & Invoices** | Search and filter bills, then view or print the branded GST tax invoice (with HUIDs and the amount in words), take payment against a due, or cancel a bill (its stock returns to inventory). |
 | **WhatsApp** (Admin only) | **Wishes:** lists customers whose birthday or anniversary is due in 7 days (adjustable), with a send button for each and "Send all"; the dashboard also reminds you. **Promotional broadcast:** to all customers, by group or city, and/or all vendors. Contacts without a valid mobile, who haven't agreed to receive WhatsApp messages, or with a duplicate number are left out automatically. **Templates:** with `{name}`, `{shop}`, `{date}` and similar placeholders. **Message log:** with CSV export. |
+| **Pawn / Girvi Loans** (Admin, Manager) | Pledge jewellery against a loan. Each item is weighed (gross, less stones/dirt, net) and valued at today's rate for its tested purity. The loan is limited to the loan-to-value (LTV) percentage (default 75%), and the screen shows monthly interest, due date and redemption amount. Supports part payments (interest due first, then principal), **redeem & release** with an items-handed-back check, extending the due date, and marking forfeited (Admin, after legal notice). Each loan prints a **pawn ticket** (customer and office copies) and a **packet QR sticker** whose QR code holds the pawn number, customer name, items, purities and weights; scan it (camera or USB scanner) to open the loan. Only the last 4 characters of the ID proof are stored. Cash payouts of ₹20,000 or more trigger a s.269SS warning. |
 | **Customers** | Customer list and profile: contact details, group, PAN/GSTIN, birthday, anniversary, ring size, notes, purchase history, payments and outstanding. Payments received are set against the oldest open bills first. |
 | **Stock** | Every tagged piece with item, purity, gross/stone/net weight, stone details and value, HUID, vendor, location and value at today's rate. You can filter, add or edit pieces, view each piece's **QR code**, and **print QR stickers** for the pieces you tick (or every piece shown). Stickers come in three sizes: jewellery dumbbell tag 95×12 mm, 50×25 mm label, or an A4 sheet of 65 labels. You choose which details appear and the number of copies. |
 | **Purchases** | Stock inward from a vendor: one row per piece, with tags generated automatically and GST on the purchase. After saving, the app offers to print QR stickers for the new pieces. Also records vendor payments. |
@@ -54,6 +55,7 @@ Demo logins (change them under **Settings → Users**):
 - **Stock:** Stock summary and valuation (gross, net and fine weight), tag-wise stock detail with age in days, re-order list.
 - **Purchases:** Purchase register, vendor payables.
 - **Customers:** Outstanding dues, top customers, upcoming birthdays and anniversaries.
+- **Pawn:** Pawn loan register (with interest due today), pawn collections (interest and principal received).
 - **Rates:** Rate history.
 
 ## Pre-loaded Item Master (113 items)
@@ -108,6 +110,7 @@ JewelleryApp/
     ├── whatsapp.js        # WhatsApp sending (click-to-chat links and Cloud API)
     ├── qr.js              # QR codes: stickers, printing, camera scanner
     ├── payments.js        # payment gateway: built-in test gateway + Razorpay checkout
+    ├── pawn.js            # pawn loans: valuation, LTV limit, interest, repayments, QR text
     ├── vendor/            # qrcode-generator 1.4.4 (MIT), jsQR 1.4.0 (Apache-2.0)
     ├── app.js             # app shell, navigation, router
     └── pages/             # dashboard, rates, pos, sales, customers, stock,
@@ -119,6 +122,17 @@ JewelleryApp/
 - Each piece's QR code contains just its tag number (e.g. `T1001`). The same sticker works with the in-app camera scanner and with any USB/Bluetooth QR scanner gun, which types the code into the scan box.
 - **Camera scanning** needs the app to be opened over `https` (for example the GitHub Pages link) or from `localhost`. Some browsers block the camera when `index.html` is opened directly as a file; **Scan from a photo** works everywhere.
 - **Thermal label printers** (TSC, Zebra, Argox, TVS, …): in the print window, pick the label printer, set the paper size to the sticker size and margins to none. **A4 label sheets:** print at 100% / Actual size.
+
+## Pawn / girvi interest
+
+Interest is simple interest at a monthly rate on the principal outstanding, worked out between payments.
+
+- **Monthly method** (default): a started month counts as a full month.
+- **Daily method:** charges the exact days (rate × days ÷ 30).
+
+A minimum period (default 1 month) is always charged. Payments go to interest due first, then to principal. Defaults (LTV, rate, method, minimum, tenure, number prefix, licence number, ticket terms) are set under **Pawn settings**.
+
+Pawnbroking needs a state licence. Most states (under their Pawnbrokers or Money-Lending Acts) also cap the interest rate and set rules for pawn tickets, notices and auctions. Check your state's limits before setting the defaults.
 
 ## Online payments (payment gateway)
 

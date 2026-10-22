@@ -56,6 +56,10 @@
         kpi('Stock Value (today\'s rate)', U.inr(stockValue, { whole: true }), 'before GST') +
         kpi('Customer Dues', U.inr(receivable, { whole: true }), 'receivable', receivable > 0 ? 'warn' : '') +
         kpi('Vendor Payable', U.inr(payable, { whole: true }), 'to suppliers') +
+        (Auth.can(['Admin', 'Manager']) && DB.all('pawns').length ? (() => {
+          const ps = Pawn.summary();
+          return '<a class="kpi kpi-link' + (ps.overdue ? ' warn' : '') + '" href="#/pawn"><span>Pawn loans out</span><b>' + U.inr(ps.principal, { whole: true }) + '</b><small>' + ps.count + ' active' + (ps.overdue ? ' \u00B7 ' + ps.overdue + ' overdue' : '') + '</small></a>';
+        })() : '') +
         '</div>' +
         '<div class="grid-2">' +
         '<section class="card"><div class="card-head"><h3>Today\'s Rates <small>per gram</small></h3><a href="#/rates">History &rarr;</a></div>' +

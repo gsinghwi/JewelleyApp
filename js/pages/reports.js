@@ -204,6 +204,38 @@
       },
     },
     {
+      id: 'pawnRegister', group: 'Pawn', title: 'Pawn loan register', params: ['range'],
+      run(p) {
+        const rows = DB.all('pawns').filter((x) => U.inRange(x.date, p.from, p.to)).sort((a, b) => (a.pawnNo < b.pawnNo ? -1 : 1)).map((x) => {
+          const c = Pawn.calc(x);
+          return {
+            no: x.pawnNo, date: U.fmtDate(x.date), customer: DB.name('customers', x.customerId) || x.customerName, items: x.items.map((i) => i.description).join(', '),
+            netWt: x.netWt, value: x.value, loan: x.principal, interestPaid: c.interestPaid, principalPaid: c.principalPaid,
+            outstanding: c.principal, interestDue: x.status === 'ACTIVE' ? c.interestDue : 0, due: U.fmtDate(x.dueDate),
+            status: x.status === 'ACTIVE' && c.overdueDays > 0 ? 'Overdue ' + c.overdueDays + 'd' : x.status.charAt(0) + x.status.slice(1).toLowerCase(),
+          };
+        });
+        return {
+          note: 'Interest due is calculated up to today.',
+          columns: [R('Pawn no', 'no'), R('Date', 'date'), R('Customer', 'customer'), R('Items', 'items'), Wt('Net g', 'netWt'), M('Value', 'value'), M('Loan', 'loan'),
+            M('Interest received', 'interestPaid'), M('Principal received', 'principalPaid'), M('Outstanding', 'outstanding'), M('Interest due', 'interestDue'), R('Due date', 'due'), R('Status', 'status')],
+          rows, totals: totalsFor(rows, ['netWt', 'value', 'loan', 'interestPaid', 'principalPaid', 'outstanding', 'interestDue']),
+        };
+      },
+    },
+    {
+      id: 'pawnCollections', group: 'Pawn', title: 'Pawn collections (interest & principal)', params: ['range'],
+      run(p) {
+        const rows = [];
+        DB.all('pawns').forEach((x) => (x.payments || []).filter((y) => U.inRange(y.date, p.from, p.to)).forEach((y) => rows.push({
+          dateIso: y.date, date: U.fmtDate(y.date), no: x.pawnNo, customer: DB.name('customers', x.customerId) || x.customerName, type: y.type || 'Payment',
+          mode: y.mode, amount: y.amount, interest: y.interestPart, principal: y.principalPart,
+        })));
+        rows.sort((a, b) => (a.dateIso < b.dateIso ? -1 : 1));
+        return { columns: [R('Date', 'date'), R('Pawn no', 'no'), R('Customer', 'customer'), R('Type', 'type'), R('Mode', 'mode'), M('Amount', 'amount'), M('Interest', 'interest'), M('Principal', 'principal')], rows, totals: totalsFor(rows, ['amount', 'interest', 'principal']) };
+      },
+    },
+    {
       id: 'rateHistory', group: 'Rates', title: 'Rate history', params: ['range'],
       run(p) {
         const purities = DB.all('purities').filter((x) => x.metalId !== 'NONE');

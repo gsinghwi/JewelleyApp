@@ -43,6 +43,7 @@
         d.vendors.forEach((v) => { if (/^ven_\d+$/.test(v.id) && v.waOptIn === undefined) v.waOptIn = true; });
       }
       if (!d.waLog) d.waLog = [];
+      if (!d.pawns) d.pawns = [];
     },
 
     persist() {

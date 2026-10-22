@@ -69,7 +69,9 @@
     const info = [
       ['Mobile', c.phone], ['Email', c.email], ['Group', DB.name('customerGroups', c.groupId)], ['City', c.city],
       ['Birthday', U.fmtDate(c.dob)], ['Anniversary', U.fmtDate(c.anniversary)], ['PAN', c.pan], ['GSTIN', c.gstin],
-      ['Ring / bangle size', c.ringSize], ['Address', [c.address, c.city, c.state].filter(Boolean).join(', ')], ['Notes', c.notes],
+      ['Ring / bangle size', c.ringSize],
+      ['Pawn loans', (() => { const a = Pawn.active().filter((p) => p.customerId === c.id); return a.length ? a.length + ' active: ' + a.map((p) => p.pawnNo).join(', ') : ''; })()],
+      ['Address', [c.address, c.city, c.state].filter(Boolean).join(', ')], ['Notes', c.notes],
     ].filter((x) => x[1]);
     const history = s.invoices.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
     const m = UI.modal({

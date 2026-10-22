@@ -17,8 +17,9 @@
   const QR = {
     FORMATS,
 
-    svg(text) {
-      const q = global.qrcode(0, 'M');
+    // ecc: error correction level. 'L' keeps longer texts (e.g. pawn packets) small enough for stickers.
+    svg(text, ecc) {
+      const q = global.qrcode(0, ecc || 'M');
       q.addData(String(text));
       q.make();
       return q.createSvgTag({ cellSize: 1, margin: 1, scalable: true });
@@ -73,8 +74,46 @@
       const f = FORMATS[fmt];
       const list = [];
       pieces.forEach((p) => { for (let c = 0; c < (copies || 1); c++) list.push(p); });
-      const pageCss = '<style>@page { size: ' + f.page + '; margin: ' + (f.sheet ? '10.7mm 4.65mm' : '0') + '; }</style>';
-      return pageCss + '<div class="stickers ' + (f.sheet ? 'sheet' : 'roll') + '">' + list.map((p) => QR.sticker(p, fmt, show)).join('') + '</div>';
+      return QR.pageCss(fmt) + '<div class="stickers ' + (f.sheet ? 'sheet' : 'roll') + '">' + list.map((p) => QR.sticker(p, fmt, show)).join('') + '</div>';
+    },
+
+    pageCss(fmt) {
+      const f = FORMATS[fmt];
+      return '<style>@page { size: ' + f.page + '; margin: ' + (f.sheet ? '10.7mm 4.65mm' : '0') + '; }</style>';
+    },
+
+    /* Generic QR labels: [{ qr, title, lines: [] }] on 50x25 mm or A4 sheet stickers */
+    label(l, fmt) {
+      return '<div class="sticker ' + FORMATS[fmt].cls + '"><div class="st-qr">' + QR.svg(l.qr, 'L') + '</div><div class="st-text">' +
+        '<b class="st-no">' + esc(l.title) + '</b>' + l.lines.filter(Boolean).map((t) => '<span>' + esc(t) + '</span>').join('') + '</div></div>';
+    },
+
+    printLabels(labels, title) {
+      const fields = [
+        { name: 'fmt', label: 'Sticker type', type: 'select', required: true, full: true, options: ['l50', 'a4'].map((k) => ({ value: k, label: FORMATS[k].label })) },
+        { name: 'copies', label: 'Copies', type: 'number', min: 1, required: true },
+      ];
+      const m = UI.modal({
+        title: title || 'Print QR labels', size: 'wide',
+        body: UI.formHtml(fields, { fmt: 'l50', copies: 1 }) + '<h4 class="sub">Preview (actual size)</h4><div class="sticker-preview"></div>',
+        actions: [{ label: 'Cancel' }, {
+          label: 'Print', cls: 'btn primary', onClick: (el) => {
+            const d = UI.readForm(el, fields);
+            if (!d) return false;
+            const copies = Math.max(1, Math.min(20, Math.round(U.n(d.copies) || 1)));
+            const list = [];
+            labels.forEach((l) => { for (let i = 0; i < copies; i++) list.push(l); });
+            UI.print(QR.pageCss(d.fmt) + '<div class="stickers ' + (FORMATS[d.fmt].sheet ? 'sheet' : 'roll') + '">' + list.map((l) => QR.label(l, d.fmt)).join('') + '</div>');
+          },
+        }],
+      });
+      const preview = () => {
+        const d = UI.readForm(m.el, fields) || { fmt: 'l50' };
+        m.el.querySelector('.sticker-preview').innerHTML = '<div class="stickers preview ' + (FORMATS[d.fmt].sheet ? 'sheet' : 'roll') + '">' +
+          labels.slice(0, 2).map((l) => QR.label(l, d.fmt)).join('') + '</div>';
+      };
+      m.el.querySelector('form').addEventListener('input', preview);
+      preview();
     },
 
     /* Dialog to choose sticker format and fields, preview, then print */

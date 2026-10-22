@@ -254,6 +254,14 @@
     waApiVersion: 'v21.0',
     pgMode: 'SIMULATED',
     pgKeyId: '',
+    pawnLtvPct: 75,
+    pawnInterestPct: 1.5,
+    pawnMethod: 'MONTHLY',
+    pawnMinMonths: 1,
+    pawnTenureMonths: 12,
+    pawnPrefix: 'PWN',
+    pawnLicence: '',
+    pawnTerms: '1. Pledged articles are kept in safe custody and returned only to the pledger (or a person authorised in writing) on production of this ticket and payment of the principal and interest due.\n2. Interest is charged at the rate and on the basis stated on this ticket.\n3. If the loan is not repaid by the due date, written notice will be given; articles not redeemed after the notice period may be sold by public auction as per the applicable Pawnbrokers / Money-Lending Act, and any surplus will be paid to the pledger.\n4. Please check the items and weights at the time of pledge and of release.\n5. Inform us of any change of address or mobile number.',
   };
 
   // WhatsApp message templates. In API mode each needs a matching template approved in Meta.
@@ -345,7 +353,8 @@
       items, vendors, customers, rates, stock,
       purchases: [], vendorPayments: [], invoices: [], receipts: [],
       waTemplates: waTemplates.map((t) => Object.assign({}, t)), waLog: [],
-      counters: { invoice: 0, purchase: 0, tag: 1000 + stock.length, customer: customers.length - 1, receipt: 0 },
+      counters: { invoice: 0, purchase: 0, tag: 1000 + stock.length, customer: customers.length - 1, receipt: 0, pawn: 0 },
+      pawns: [],
       audit: [],
     };
 
@@ -381,6 +390,40 @@
         const piece = stock.find((s) => s.tagNo === tag);
         piece.status = 'SOLD';
         piece.soldInvoiceId = record.id;
+      });
+    });
+
+    // Demo pawn loans: one active with an interest payment, one overdue, one redeemed
+    const r22 = rates[6].values.G22K;
+    const pawnItem = (description, grossWt, lessWt) => {
+      const netWt = Math.round((grossWt - lessWt) * 1000) / 1000;
+      return { description, purityId: 'G22K', grossWt, lessWt, netWt, rate: r22, value: Math.round(netWt * r22 * 100) / 100 };
+    };
+    const demoPawns = [
+      { customerId: 'cus_2', ago: 75, items: [pawnItem('Gold Chain', 12.4, 0), pawnItem('Ladies Ring', 4.1, 0.3)], principal: 140000, packetNo: 'L1-001',
+        payments: [{ day: 30, amount: 2100, interestPart: 2100, principalPart: 0, mode: 'UPI', type: 'Payment' }] },
+      { customerId: 'cus_5', ago: 400, items: [pawnItem('Bangles (pair)', 20, 0)], principal: 150000, packetNo: 'L1-002', payments: [] },
+      { customerId: 'cus_1', ago: 200, items: [pawnItem('Jhumka', 8.6, 0.4)], principal: 50000, packetNo: 'L1-003', closedAgo: 20,
+        payments: [{ day: 180, amount: 54500, interestPart: 4500, principalPart: 50000, mode: 'Cash', type: 'Redeem' }] },
+    ];
+    demoPawns.forEach((d) => {
+      const date = U.addDays(today, -d.ago);
+      const due = new Date(date + 'T00:00:00');
+      due.setMonth(due.getMonth() + 12);
+      const cust = customers.find((c) => c.id === d.customerId);
+      data.counters.pawn += 1;
+      data.pawns.push({
+        id: 'pwn_' + data.counters.pawn,
+        pawnNo: settings.pawnPrefix + '/' + U.finYear(date) + '/' + String(data.counters.pawn).padStart(4, '0'),
+        customerId: d.customerId, customerName: cust.name, date, dueDate: U.isoDate(due),
+        idProof: 'Aadhaar', idLast4: String(4321 + data.counters.pawn), packetNo: d.packetNo,
+        items: d.items, grossWt: Math.round(d.items.reduce((s, i) => s + i.grossWt, 0) * 1000) / 1000, netWt: Math.round(d.items.reduce((s, i) => s + i.netWt, 0) * 1000) / 1000,
+        value: Math.round(d.items.reduce((s, i) => s + i.value, 0) * 100) / 100,
+        ltvPct: 75, principal: d.principal, interestPct: 1.5, interestMethod: 'MONTHLY', minMonths: 1, tenureMonths: 12, processingFee: 0,
+        payoutMode: 'NEFT / RTGS / IMPS', payoutRef: '', notes: '',
+        status: d.closedAgo ? 'REDEEMED' : 'ACTIVE', closedOn: d.closedAgo ? U.addDays(today, -d.closedAgo) : '',
+        payments: d.payments.map((p) => ({ date: U.addDays(date, p.day), amount: p.amount, interestPart: p.interestPart, principalPart: p.principalPart, mode: p.mode, ref: '', type: p.type, by: 'manager' })),
+        by: 'manager', createdAt: date + 'T11:00:00',
       });
     });
     return data;
