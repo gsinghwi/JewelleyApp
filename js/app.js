@@ -7,7 +7,7 @@
 
   const NAV = [
     { group: 'Overview', ids: ['dashboard', 'rates'] },
-    { group: 'Sales', ids: ['pos', 'sales', 'customers', 'whatsapp'] },
+    { group: 'Sales', ids: ['pos', 'sales', 'payments', 'customers', 'whatsapp'] },
     { group: 'Inventory', ids: ['stock', 'purchases', 'vendors'] },
     { group: 'Admin', ids: ['reports', 'masters', 'settings'] },
   ];

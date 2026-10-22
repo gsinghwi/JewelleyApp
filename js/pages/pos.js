@@ -49,7 +49,8 @@
         '<h3>Bill summary</h3><div class="pos-totals"></div>' +
         '<div class="field"><label>Discount (₹, before GST)</label><input type="number" min="0" data-h="discount"></div>' +
         '<h4 class="sub">Payments</h4><div class="pos-pay"></div>' +
-        '<div class="actions-row"><button class="btn sm" data-add-pay>+ Split payment</button><button class="btn sm" data-fill>Fill balance</button></div>' +
+        '<div class="actions-row"><button class="btn sm" data-add-pay>+ Split payment</button><button class="btn sm" data-fill>Fill balance</button>' +
+        (PG.enabled() ? '<button class="btn sm pay-online-btn" data-online>Collect online</button>' : '') + '</div>' +
         '<div class="field"><label>Notes</label><textarea rows="2" data-h="notes" placeholder="Order ref, size alteration, etc."></textarea></div>' +
         '<div class="pos-buttons"><button class="btn primary block" data-save="print">Save &amp; Print</button><button class="btn block" data-save="view">Save</button><button class="btn ghost block" data-clear>Clear bill</button></div>' +
         '</aside></div>';
@@ -120,11 +121,14 @@
       }
 
       function renderPayments() {
-        $('.pos-pay').innerHTML = draft.payments.map((p, i) => '<div class="pay-row">' +
+        $('.pos-pay').innerHTML = draft.payments.map((p, i) => (p.gatewayRecId
+          // Collected through the gateway: shown read-only, cannot be edited or removed here
+          ? '<div class="pay-row online"><span>' + esc(p.mode) + '</span><b>' + U.inr(p.amount) + '</b><small title="Gateway payment ID">' + esc(p.ref) + '</small>' + UI.badge('Paid online', 'ok') + '</div>'
+          : '<div class="pay-row">' +
           '<select data-p="' + i + '" data-k="mode">' + modes.map((m) => '<option' + (m === p.mode ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select>' +
           '<input type="number" min="0" step="any" placeholder="Amount" data-p="' + i + '" data-k="amount" value="' + esc(p.amount) + '">' +
           '<input placeholder="Ref / UTR" data-p="' + i + '" data-k="ref" value="' + esc(p.ref) + '">' +
-          (draft.payments.length > 1 ? '<button class="icon-btn danger" data-rm-pay="' + i + '">&times;</button>' : '') + '</div>').join('');
+          (draft.payments.length > 1 ? '<button class="icon-btn danger" data-rm-pay="' + i + '">&times;</button>' : '') + '</div>')).join('');
       }
 
       function recalc() {
@@ -231,6 +235,34 @@
         });
       }
 
+      function collectOnline() {
+        const inv = recalc();
+        if (!inv.lines.length) { UI.toast('Add items to the bill first', 'error'); return; }
+        if (inv.balance <= 0) { UI.toast('Nothing left to collect on this bill', 'error'); return; }
+        const c = DB.get('customers', draft.customerId);
+        const fields = [{ name: 'amount', label: 'Amount to collect online (\u20B9)', type: 'number', min: 1, required: true, help: 'Balance on this bill: ' + U.inr(inv.balance) }];
+        UI.modal({
+          title: 'Collect online payment',
+          body: UI.formHtml(fields, { amount: inv.balance }) + '<p class="muted small">Gateway: ' + esc(PG.label()) + '. The customer pays by UPI, card, net banking or wallet.</p>',
+          actions: [{ label: 'Cancel' }, {
+            label: 'Continue to payment', cls: 'btn primary', onClick: (mel) => {
+              const d = UI.readForm(mel, fields);
+              if (!d) return false;
+              if (d.amount > inv.balance) { UI.toast('Amount is more than the balance of ' + U.inr(inv.balance), 'error'); return false; }
+              PG.collect({ amount: d.amount, customer: c && c.id !== 'cus_walkin' ? c : null, purpose: 'Sale', description: 'Jewellery purchase' }).then((pay) => {
+                if (!pay) return;
+                // Drop empty manual rows so the online payment is the clear record
+                draft.payments = draft.payments.filter((p) => p.gatewayRecId || U.n(p.amount));
+                draft.payments.push({ mode: PG.modeName(pay), amount: pay.amount, ref: pay.paymentId, gatewayRecId: pay.id });
+                if (!draft.payments.some((p) => !p.gatewayRecId)) draft.payments.push({ mode: 'Cash', amount: '', ref: '' });
+                renderPayments();
+                recalc();
+              });
+            },
+          }],
+        });
+      }
+
       function save(mode) {
         const inv = recalc();
         const c = DB.get('customers', draft.customerId);
@@ -255,6 +287,7 @@
           s.status = 'SOLD';
           s.soldInvoiceId = record.id;
         });
+        record.payments.forEach((p) => PG.link(p.gatewayRecId, { invoiceId: record.id, invoiceNo: record.invoiceNo, customerId: record.customerId, customerName: c.name }));
         DB.persist();
         draft = blank();
         UI.toast('Invoice ' + record.invoiceNo + ' saved');
@@ -327,11 +360,13 @@
           renderPayments();
         } else if ('fill' in d) {
           const inv = Pricing.calcInvoice(draft);
-          const last = draft.payments[draft.payments.length - 1];
+          let last = draft.payments.filter((p) => !p.gatewayRecId).pop();
+          if (!last) { last = { mode: 'Cash', amount: '', ref: '' }; draft.payments.push(last); }
           last.amount = U.r2(U.n(last.amount) + inv.balance);
           renderPayments();
           recalc();
-        } else if ('scanqr' in d) QR.scanner((code) => addPiece(findPiece(code), true));
+        } else if ('online' in d) collectOnline();
+        else if ('scanqr' in d) QR.scanner((code) => addPiece(findPiece(code), true));
         else if ('browse' in d) browseStock();
         else if ('newCust' in d) quickCustomer();
         else if ('refreshRates' in d) {
@@ -342,7 +377,9 @@
           UI.toast('Latest rates applied');
         } else if ('save' in d) save(d.save);
         else if ('clear' in d) {
-          if (draft.lines.length && !(await UI.confirm('Clear this bill?', 'Clear'))) return;
+          const online = U.sum(draft.payments.filter((p) => p.gatewayRecId), 'amount');
+          if (online && !(await UI.confirm(U.inr(online) + ' was already collected online for this bill. Clearing it leaves that payment unlinked (it stays on the Payments screen for refund or adjustment). Clear anyway?', 'Clear bill'))) return;
+          if (!online && draft.lines.length && !(await UI.confirm('Clear this bill?', 'Clear'))) return;
           draft = blank();
           App.route();
         }

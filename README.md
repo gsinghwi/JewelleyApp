@@ -37,6 +37,7 @@ Demo logins (change them under **Settings → Users**):
 | **Dashboard** | Today's and this month's sales, stock in hand and its value at today's rate, customer dues, vendor payables, today's rates, a 7-day sales chart, recent bills, upcoming birthdays and anniversaries, and low-stock alerts. |
 | **Today's Rates** | Enter the gold, silver and platinum rates per gram for every purity. "Auto-fill" works out 22K, 18K and 14K from 24K, and 925 silver from 999. Every rate change is kept in a history with a trend chart. Billing uses the latest saved rate, and it shows in the top bar on every screen. |
 | **New Sale / Billing (POS)** | Scan a QR sticker with the camera (**Scan QR**: keeps scanning, so several pieces can be added in a row; a photo also works), use a USB/Bluetooth QR scanner, type a tag number or HUID, or browse stock. Each line is priced as net weight × rate + wastage/VA + making charge (percent, per gram or flat) + stone value + hallmark charge. Rate, making and VA can be edited per line. Customer-group making discounts apply automatically. The bill also handles discounts, old-gold exchange (deducted after GST), CGST/SGST or IGST, split payments and balance due. On save the invoice prints. |
+| **Online Payments** (Admin, Manager) | Every online payment attempt: date, gateway payment and order IDs, customer, method (UPI / card network and last 4 digits / bank / wallet), amount, status (paid, authorized, failed, refunded), test or live, and the bill or receipt it belongs to. Filters, CSV export, a detail view, and "Mark refunded" for cancelled bills or unlinked payments. |
 | **Sales & Invoices** | Search and filter bills, then view or print the branded GST tax invoice (with HUIDs and the amount in words), take payment against a due, or cancel a bill (its stock returns to inventory). |
 | **WhatsApp** (Admin only) | **Wishes:** lists customers whose birthday or anniversary is due in 7 days (adjustable), with a send button for each and "Send all"; the dashboard also reminds you. **Promotional broadcast:** to all customers, by group or city, and/or all vendors. Contacts without a valid mobile, who haven't agreed to receive WhatsApp messages, or with a duplicate number are left out automatically. **Templates:** with `{name}`, `{shop}`, `{date}` and similar placeholders. **Message log:** with CSV export. |
 | **Customers** | Customer list and profile: contact details, group, PAN/GSTIN, birthday, anniversary, ring size, notes, purchase history, payments and outstanding. Payments received are set against the oldest open bills first. |
@@ -106,6 +107,7 @@ JewelleryApp/
     ├── schemas.js         # field and column definitions for every master
     ├── whatsapp.js        # WhatsApp sending (click-to-chat links and Cloud API)
     ├── qr.js              # QR codes: stickers, printing, camera scanner
+    ├── payments.js        # payment gateway: built-in test gateway + Razorpay checkout
     ├── vendor/            # qrcode-generator 1.4.4 (MIT), jsQR 1.4.0 (Apache-2.0)
     ├── app.js             # app shell, navigation, router
     └── pages/             # dashboard, rates, pos, sales, customers, stock,
@@ -117,6 +119,19 @@ JewelleryApp/
 - Each piece's QR code contains just its tag number (e.g. `T1001`). The same sticker works with the in-app camera scanner and with any USB/Bluetooth QR scanner gun, which types the code into the scan box.
 - **Camera scanning** needs the app to be opened over `https` (for example the GitHub Pages link) or from `localhost`. Some browsers block the camera when `index.html` is opened directly as a file; **Scan from a photo** works everywhere.
 - **Thermal label printers** (TSC, Zebra, Argox, TVS, …): in the print window, pick the label printer, set the paper size to the sticker size and margins to none. **A4 label sheets:** print at 100% / Actual size.
+
+## Online payments (payment gateway)
+
+On the billing screen, **Collect online** takes all or part of a bill by UPI, card, net banking or wallet. The amount is added to the bill as a locked "Online - UPI/Card/…" payment with its gateway payment ID, and the rest can be paid by cash or another mode. Customer dues can also be paid online from **Receive payment → Collect online**, which creates the receipt automatically. Cancelling a bill that was paid online flags the payment as **Refund due**.
+
+Choose the gateway under **Settings → Payment gateway**:
+
+- **Test gateway (simulated):** the default. No account needed and no real money moves. Test with UPI `success@razorpay` / `failure@razorpay`, card `4111 1111 1111 1111` (success) or `4000 0000 0000 0002` (declined), or net banking/wallet with an optional "simulate failure" tick.
+- **Razorpay:** paste your **Key ID** from Razorpay Dashboard → Account & Settings → API Keys. A `rzp_test_…` key gives test mode, where Razorpay's own test cards and UPI IDs work; a `rzp_live_…` key takes real payments. **Never enter the Key Secret in the app.**
+
+Every attempt, successful or failed, is saved in the `gatewayPayments` collection of the app's data store. Card numbers, CVV and UPI PINs are never stored: only the gateway's payment ID, the method, and for cards the network and last 4 digits.
+
+**Before going live with Razorpay:** a small server should create a Razorpay Order (using the Key Secret), verify the payment signature, capture the payment and receive webhooks. Until then, Razorpay payments are recorded as **Authorized** and must be captured in the Razorpay dashboard, or Razorpay refunds them automatically. This server step belongs with the move to a shared database.
 
 ## WhatsApp
 

@@ -3,41 +3,64 @@
   'use strict';
   const esc = U.esc;
 
+  function saveReceipt(customer, d) {
+    d.customerId = customer.id;
+    d.receiptNo = DB.nextNo('receipt', 'RCT', d.date);
+    d.by = Auth.user.username;
+    // Settle the oldest bills with a balance first so each invoice shows its current due
+    let left = d.amount;
+    DB.all('invoices').filter((i) => i.customerId === customer.id && i.status !== 'CANCELLED' && i.balance > 0)
+      .sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((inv) => {
+        if (left <= 0) return;
+        const part = Math.min(left, inv.balance);
+        inv.balance = U.r2(inv.balance - part);
+        (inv.settlements = inv.settlements || []).push({ receiptNo: d.receiptNo, date: d.date, amount: part });
+        left -= part;
+      });
+    const rec = DB.insert('receipts', d);
+    UI.toast('Receipt ' + d.receiptNo + ' saved');
+    return rec;
+  }
+
   function receivePayment(customer, onDone) {
     const sum = DB.customerSummary(customer.id);
     const fields = [
       { name: 'date', label: 'Date', type: 'date', required: true, default: U.today() },
-      { name: 'amount', label: 'Amount received (₹)', type: 'number', required: true, min: 1, default: sum.outstanding > 0 ? sum.outstanding : '' },
+      { name: 'amount', label: 'Amount received (\u20B9)', type: 'number', required: true, min: 1, default: sum.outstanding > 0 ? sum.outstanding : '' },
       { name: 'mode', label: 'Mode', type: 'select', required: true, options: DB.all('paymentModes').filter((m) => m.active !== false).map((m) => m.name) },
       { name: 'ref', label: 'Reference / UTR / Cheque no.' },
       { name: 'notes', label: 'Notes', full: true },
     ];
-    UI.modal({
-      title: 'Receive payment - ' + customer.name,
-      body: '<p class="muted">Outstanding: <b>' + U.inr(sum.outstanding) + '</b></p>' + UI.formHtml(fields, {}),
-      actions: [{ label: 'Cancel' }, {
-        label: 'Save receipt', cls: 'btn primary', onClick: (el) => {
+    const actions = [{ label: 'Cancel' }];
+    if (PG.enabled()) {
+      actions.push({
+        label: 'Collect online', cls: 'btn', onClick: (el) => {
           const d = UI.readForm(el, fields);
           if (!d) return false;
           if (d.amount <= 0) { UI.toast('Amount must be positive', 'error'); return false; }
-          d.customerId = customer.id;
-          d.receiptNo = DB.nextNo('receipt', 'RCT', d.date);
-          d.by = Auth.user.username;
-          // Settle the oldest bills with a balance first so each invoice shows its current due
-          let left = d.amount;
-          DB.all('invoices').filter((i) => i.customerId === customer.id && i.status !== 'CANCELLED' && i.balance > 0)
-            .sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((inv) => {
-              if (left <= 0) return;
-              const part = Math.min(left, inv.balance);
-              inv.balance = U.r2(inv.balance - part);
-              (inv.settlements = inv.settlements || []).push({ receiptNo: d.receiptNo, date: d.date, amount: part });
-              left -= part;
-            });
-          DB.insert('receipts', d);
-          UI.toast('Receipt ' + d.receiptNo + ' saved');
-          if (onDone) onDone();
+          PG.collect({ amount: d.amount, customer, purpose: 'Due payment', description: 'Payment towards dues' }).then((pay) => {
+            if (!pay) return;
+            const r = saveReceipt(customer, Object.assign(d, { mode: PG.modeName(pay), ref: pay.paymentId, gatewayRecId: pay.id }));
+            PG.link(pay.id, { receiptId: r.id, receiptNo: r.receiptNo });
+            if (onDone) onDone();
+          });
         },
-      }],
+      });
+    }
+    actions.push({
+      label: 'Save receipt', cls: 'btn primary', onClick: (el) => {
+        const d = UI.readForm(el, fields);
+        if (!d) return false;
+        if (d.amount <= 0) { UI.toast('Amount must be positive', 'error'); return false; }
+        saveReceipt(customer, d);
+        if (onDone) onDone();
+      },
+    });
+    UI.modal({
+      title: 'Receive payment - ' + customer.name,
+      body: '<p class="muted">Outstanding: <b>' + U.inr(sum.outstanding) + '</b></p>' + UI.formHtml(fields, {}) +
+        (PG.enabled() ? '<p class="muted small">"Collect online" opens the payment gateway (' + esc(PG.label()) + ') for this amount.</p>' : ''),
+      actions,
     });
   }
 

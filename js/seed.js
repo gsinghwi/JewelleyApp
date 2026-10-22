@@ -252,6 +252,8 @@
     waPhoneNumberId: '',
     waToken: '',
     waApiVersion: 'v21.0',
+    pgMode: 'SIMULATED',
+    pgKeyId: '',
   };
 
   // WhatsApp message templates. In API mode each needs a matching template approved in Meta.

@@ -32,6 +32,15 @@
     { name: 'showDemoHint', label: 'Show demo logins on the sign-in page', type: 'checkbox', full: true },
   ];
 
+  const paymentFields = [
+    { name: 'pgMode', label: 'Online payments', type: 'select', required: true, full: true, options: [
+      { value: 'SIMULATED', label: 'Test gateway (simulated): try the full flow, no real money' },
+      { value: 'RAZORPAY', label: 'Razorpay: test or live, using your Key ID' },
+      { value: 'OFF', label: 'Off: hide "Collect online"' }] },
+    { name: 'pgKeyId', label: 'Razorpay Key ID', full: true, placeholder: 'rzp_test_xxxxxxxxxxxxxx',
+      help: 'Razorpay Dashboard > Account & Settings > API Keys. Use a rzp_test_ key for testing. Never enter the Key Secret here.' },
+  ];
+
   const PRESETS = [
     ['Royal Maroon', '#7a1f2b', '#c9a227'], ['Emerald', '#0f5c4a', '#d4af37'], ['Midnight', '#1d2a4d', '#c9a227'],
     ['Rose Gold', '#8c4a52', '#e0a98f'], ['Classic Black', '#1f1f1f', '#d4af37'], ['Peacock', '#0b4f6c', '#e3b23c'],
@@ -56,7 +65,8 @@
         '<div class="presets"><span class="muted small">Colour themes:</span>' + PRESETS.map(([n, p, a]) => '<button class="preset" data-preset="' + p + ',' + a + '" title="' + n + '" style="background:linear-gradient(135deg,' + p + ' 60%,' + a + ' 60%)"></button>').join('') + '</div>' +
         '<h4 class="sub">Login page preview</h4><div class="preview-box">' + preview(s) + '</div></section>' +
         '<section class="card"><div class="card-head"><h3>Shop details</h3></div><div class="shop-form">' + UI.formHtml(shopFields, s) + '</div>' +
-        '<div class="card-head"><h3>Billing &amp; rates</h3></div><div class="billing-form">' + UI.formHtml(billingFields, s) + '</div></section>' +
+        '<div class="card-head"><h3>Billing &amp; rates</h3></div><div class="billing-form">' + UI.formHtml(billingFields, s) + '</div>' +
+        '<div class="card-head"><h3>Payment gateway</h3><a href="#/payments">View payments &rarr;</a></div><div class="pg-form">' + UI.formHtml(paymentFields, s) + '</div></section>' +
         '</div>' +
         '<div class="sticky-save"><button class="btn primary" data-save>Save settings</button></div>' +
         '<section class="card"><div class="card-head"><h3>Users &amp; roles</h3><small class="muted">Admin: everything &middot; Manager: all except settings &amp; users &middot; Sales: billing, customers, stock view</small></div><div class="users-crud"></div></section>' +
@@ -72,7 +82,7 @@
 
       const current = () => {
         const d = {};
-        [['.brand-form', brandFields], ['.shop-form', shopFields], ['.billing-form', billingFields]].forEach(([sel, f]) => {
+        [['.brand-form', brandFields], ['.shop-form', shopFields], ['.billing-form', billingFields], ['.pg-form', paymentFields]].forEach(([sel, f]) => {
           f.forEach((field) => {
             const inp = el.querySelector(sel + ' [name="' + field.name + '"]');
             if (!inp) return;
@@ -98,6 +108,7 @@
         if (!d.invoicePrefix || !d.tagPrefix || !d.purchasePrefix) { UI.toast('Prefixes cannot be empty', 'error'); return; }
         if (d.gstin && !/^[0-9]{2}[A-Z0-9]{13}$/i.test(d.gstin)) { UI.toast('GSTIN should be 15 characters', 'error'); return; }
         d.gstin = (d.gstin || '').toUpperCase();
+        if (d.pgMode === 'RAZORPAY' && !/^rzp_(test|live)_[A-Za-z0-9]+$/.test(d.pgKeyId)) { UI.toast('Enter a valid Razorpay Key ID (starts with rzp_test_ or rzp_live_)', 'error'); return; }
         if (d.gstin && !d.stateCode) d.stateCode = d.gstin.slice(0, 2);
         const before = JSON.stringify(DB.settings);
         Object.assign(DB.settings, d);

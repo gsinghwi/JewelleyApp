@@ -72,7 +72,10 @@
   }
 
   async function cancelInvoice(inv, onChange) {
-    if (!(await UI.confirm('Cancel invoice ' + inv.invoiceNo + '? Items will go back into stock.', 'Cancel invoice'))) return;
+    const online = inv.payments.filter((p) => p.gatewayRecId);
+    const refundNote = online.length ? ' ' + U.inr(U.sum(online, 'amount')) + ' was paid online: refund it from the payment gateway dashboard.' : '';
+    if (!(await UI.confirm('Cancel invoice ' + inv.invoiceNo + '? Items will go back into stock.' + refundNote, 'Cancel invoice'))) return;
+    online.forEach((p) => PG.link(p.gatewayRecId, { refundPending: true }));
     inv.lines.forEach((l) => {
       const piece = DB.get('stock', l.stockId);
       if (piece) Object.assign(piece, { status: 'IN_STOCK', soldInvoiceId: '' });

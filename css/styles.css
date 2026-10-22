@@ -22,6 +22,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body { font: 14px/1.45 var(--font); color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
 a { color: var(--primary); text-decoration: none; }
@@ -290,6 +291,28 @@ dl.info dd { margin: 0; }
 .wa-due:not(:empty) { background: #25d366; color: #fff !important; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
 .tabs .tab-link.muted { margin-left: auto; }
 .modal .banner.warn, .wa-help .banner.warn { border-radius: 8px; margin-bottom: 10px; }
+
+/* ---------- online payments ---------- */
+.pay-row.online { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid #b6e6c8; background: #eefaf2; border-radius: 8px; }
+.pay-row.online small { flex-basis: 100%; color: var(--muted); font-family: "Courier New", monospace; overflow: hidden; text-overflow: ellipsis; }
+.pay-row.online b { margin-left: auto; }
+.pay-online-btn { border-color: #2563eb; color: #1d4ed8; }
+.pg-mode-line { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.pg-mode-line b { color: var(--text); }
+.pg-sim { display: flex; flex-direction: column; gap: 12px; }
+.pg-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: linear-gradient(135deg, #0b3b8c, #2563eb); color: #fff; border-radius: 10px; padding: 14px 16px; overflow: hidden; }
+.pg-head small { display: block; opacity: .85; }
+.pg-amt { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pg-amt { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.pg-test { background: #f59e0b; color: #111; font-size: 9.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; letter-spacing: 1px; }
+.pg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.pg-tabs button { border: 1px solid var(--line); background: #fff; padding: 7px 12px; border-radius: 8px; cursor: pointer; font: inherit; }
+.pg-tabs button.active { border-color: #2563eb; color: #1d4ed8; background: #eff6ff; font-weight: 600; }
+.pg-pane { display: flex; flex-direction: column; gap: 8px; }
+.pg-status { padding: 10px 12px; border-radius: 8px; background: var(--soft); }
+.pg-status.ok { background: var(--ok-bg); color: var(--ok); }
+.pg-status.err { background: var(--err-bg); color: var(--err); }
+code { font-family: "Courier New", monospace; font-size: 12.5px; }
 
 /* ---------- invoice ---------- */
 .invoice-preview { background: #fff; }
