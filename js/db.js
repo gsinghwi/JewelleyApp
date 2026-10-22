@@ -37,6 +37,8 @@
       const d = this.data;
       // A feed URL configured before live rates existed keeps being used
       if (d.settings.liveProvider === undefined && d.settings.rateApiUrl) d.settings.liveProvider = 'CUSTOM';
+      // The first live-rate release defaulted to the international source; IBJA is the default now
+      if (d.settings.ibjaUrl === undefined && d.settings.liveProvider === 'AUTO') d.settings.liveProvider = 'IBJA';
       Object.keys(Seed.settings).forEach((k) => { if (d.settings[k] === undefined) d.settings[k] = Seed.settings[k]; });
       if (!d.waTemplates) {
         d.waTemplates = Seed.waTemplates.map((t) => Object.assign({}, t));

@@ -1,6 +1,13 @@
 /* JewelleryApp - live gold / silver / platinum rates from the internet
  *
- * Provider AUTO (default, free, no API key):
+ * Provider IBJA (default): India Bullion and Jewellers Association benchmark rates (the rates most
+ *   Indian jewellers quote), read from a free community service that republishes ibjarates.com
+ *   (https://github.com/0xSaurabhx/IBJA-API, unofficial). IBJA rates already include import duty and
+ *   exclude GST. Units are detected (gold per gram or per 10 g, silver per gram or per kg). Purities IBJA
+ *   does not publish (20K, silver 925, platinum 950) are derived from the 999 rate by fineness.
+ *   If IBJA cannot be reached, the AUTO calculation below is used instead.
+ *
+ * Provider AUTO (free, no API key):
  *   1. International spot price per troy ounce in USD from gold-api.com, converted to INR with
  *      the day's USD/INR rate (fawazahmed0 currency API, jsDelivr CDN with a Cloudflare mirror).
  *   2. If that fails: the currency API's own XAU / XAG / XPT -> INR prices (updated daily).
@@ -20,6 +27,10 @@
     'https://latest.currency-api.pages.dev/v1/currencies/',
   ];
   const GOLD_API = 'https://api.gold-api.com/price/';
+  const IBJA_DEFAULT = 'https://ibja-api.vercel.app';
+  // IBJA field -> purity code, and the plausible rupees-per-gram range used to detect units
+  const IBJA_GOLD = { lblGold999: 'G24K', lblGold916: 'G22K', lblGold750: 'G18K', lblGold585: 'G14K' };
+  const RANGE = { GOLD: [2000, 80000], SILVER: [20, 2000], PLATINUM: [1000, 40000] };
 
   async function getJSON(url, ms) {
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -55,7 +66,7 @@
     settings() {
       const s = DB.settings;
       return {
-        provider: s.liveProvider || 'AUTO', url: s.rateApiUrl || '',
+        provider: s.liveProvider || 'IBJA', url: s.rateApiUrl || '', ibjaUrl: (s.ibjaUrl || IBJA_DEFAULT).replace(/\/+$/, ''),
         duty: { GOLD: U.n(s.liveDutyGold), SILVER: U.n(s.liveDutySilver), PLATINUM: U.n(s.liveDutyPlatinum) },
         premiumPct: U.n(s.livePremiumPct), autoMins: U.n(s.liveAutoMins),
       };
@@ -108,6 +119,63 @@
       return { values, lines };
     },
 
+    /* A published rate converted to rupees per gram: pick the unit (per g / 10 g / kg) that puts it
+     * closest to today's rate for that purity, or inside the plausible range when there is none. */
+    perGram(value, metal, ref) {
+      const divisors = metal === 'SILVER' ? [1, 1000] : [1, 10];
+      const [lo, hi] = RANGE[metal];
+      const target = ref > 0 ? ref : Math.sqrt(lo * hi);
+      let best = null;
+      divisors.forEach((d) => {
+        const v = value / d;
+        const score = Math.abs(Math.log(v / target));
+        if (v >= lo && v <= hi && (!best || score < best.score)) best = { v, d, score };
+      });
+      return best;
+    },
+
+    async ibja(cfg) {
+      const base = cfg.ibjaUrl;
+      const prev = DB.currentRates();
+      const pick = (j, key) => {
+        const pm = +String(j[key + '_PM'] || '').replace(/,/g, '');
+        const am = +String(j[key + '_AM'] || '').replace(/,/g, '');
+        return pm > 0 ? { v: pm, session: 'PM' } : am > 0 ? { v: am, session: 'AM' } : null;
+      };
+      const gold = await getJSON(base + '/latest');
+      const raw = {}, warnings = [];
+      let session = '';
+      Object.keys(IBJA_GOLD).forEach((k) => { const r = pick(gold, k); if (r) { raw[IBJA_GOLD[k]] = r.v; session = session || r.session; } });
+      if (!raw.G24K) throw new Error('IBJA feed returned no 24K (999) gold rate');
+      const extra = [['SILVER', '/silver/latest', 'lblSilver999', 'S999'], ['PLATINUM', '/platinum/latest', 'lblPlatinum999', 'PT999']];
+      for (const [metal, path, key, code] of extra) {
+        try { const r = pick(await getJSON(base + path), key); if (r) raw[code] = r.v; else warnings.push(metal + ': no rate published'); } catch (e) { warnings.push(metal + ': ' + e.message); }
+      }
+      // Convert to per gram
+      const g999 = LiveRates.perGram(raw.G24K, 'GOLD', prev.G24K);
+      if (!g999) throw new Error('IBJA gold rate ' + raw.G24K + ' does not look like a valid rate');
+      const base999 = { GOLD: g999.v };
+      const unit = { GOLD: g999.d === 10 ? 'per 10 g' : 'per g' };
+      if (raw.S999) { const s = LiveRates.perGram(raw.S999, 'SILVER', prev.S999); if (s) { base999.SILVER = s.v; unit.SILVER = s.d === 1000 ? 'per kg' : 'per g'; } else warnings.push('Silver rate looks invalid'); }
+      if (raw.PT999) { const p = LiveRates.perGram(raw.PT999, 'PLATINUM', prev.PT950 ? prev.PT950 * 999 / 950 : 0); if (p) { base999.PLATINUM = p.v; unit.PLATINUM = p.d === 10 ? 'per 10 g' : 'per g'; } else warnings.push('Platinum rate looks invalid'); }
+      const values = {}, lines = [];
+      const prem = 1 + cfg.premiumPct / 100;
+      DB.all('purities').forEach((p) => {
+        let ibjaRate = null, derived = false;
+        if (p.metalId === 'GOLD' && raw[p.id]) ibjaRate = raw[p.id] / g999.d;
+        else if (base999[p.metalId]) { ibjaRate = base999[p.metalId] * p.fineness / 999; derived = true; }
+        if (!ibjaRate) return;
+        const rate = ibjaRate * prem;
+        values[p.id] = p.metalId === 'SILVER' ? Math.round(rate * 100) / 100 : Math.round(rate);
+        lines.push({ purity: p.name, spotPerGram: ibjaRate, duty: null, derived, premium: cfg.premiumPct, rate: values[p.id] });
+      });
+      return {
+        values, lines, warnings, basis: 'IBJA',
+        source: 'IBJA ' + (gold.date ? U.fmtDate(gold.date) + ' ' : '') + session + ' (via ' + new URL(base).host + ')',
+        spotAt: gold.date || '', units: unit,
+      };
+    },
+
     async custom(url) {
       if (!url) throw new Error('Enter the rate feed URL in Live rate settings');
       const j = await getJSON(url);
@@ -125,6 +193,15 @@
       let result;
       if (cfg.provider === 'CUSTOM') {
         result = await LiveRates.custom(cfg.url);
+      } else if (cfg.provider === 'IBJA') {
+        try {
+          result = await LiveRates.ibja(cfg);
+        } catch (e) {
+          // IBJA unavailable: fall back to the international price calculation
+          const sp = await LiveRates.spot();
+          const ind = LiveRates.toIndian(sp.perOz, cfg);
+          result = { values: ind.values, lines: ind.lines, source: sp.source + ' (IBJA unavailable)', spotAt: sp.at, usdInr: sp.usdInr, warnings: ['IBJA: ' + e.message].concat(sp.warnings || []) };
+        }
       } else {
         const sp = await LiveRates.spot();
         const ind = LiveRates.toIndian(sp.perOz, cfg);

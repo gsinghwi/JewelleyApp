@@ -27,26 +27,31 @@
   function liveDetail(r) {
     if (!r) return '';
     return '<div class="live-detail"><div class="card-head"><h3>How the live rates were worked out</h3><small class="muted">' + esc(U.fmtDateTime(r.fetchedAt)) + '</small></div>' +
-      '<p class="small">Source: <b>' + esc(r.source) + '</b>' + (r.spotAt ? ' &middot; price time ' + esc(U.fmtDateTime(r.spotAt)) : '') + '</p>' +
+      '<p class="small">Source: <b>' + esc(r.source) + '</b>' + (r.spotAt && r.basis !== 'IBJA' ? ' &middot; price time ' + esc(U.fmtDateTime(r.spotAt)) : '') +
+      (r.units ? ' &middot; published ' + esc(Object.keys(r.units).map((m) => m.toLowerCase() + ' ' + r.units[m]).join(', ')) : '') + '</p>' +
       (r.lines.length ? UI.table({
         columns: [
           { label: 'Purity', key: 'purity' },
-          { label: 'International \u20B9/g', align: 'right', render: (l) => U.num(l.spotPerGram, 2) },
-          { label: '+ Import duty', align: 'right', render: (l) => l.duty + '%' },
+          { label: r.basis === 'IBJA' ? 'IBJA rate \u20B9/g' : 'International \u20B9/g', align: 'right', render: (l) => U.num(l.spotPerGram, 2) + (l.derived ? ' <small class="muted">(from 999)</small>' : '') },
+          { label: '+ Import duty', align: 'right', render: (l) => (l.duty == null ? '<small class="muted">included</small>' : l.duty + '%') },
           { label: '+ Premium', align: 'right', render: (l) => l.premium + '%' },
           { label: 'Indian rate \u20B9/g', align: 'right', render: (l) => '<b>' + U.num(l.rate, 2) + '</b>' },
         ],
         rows: r.lines,
       }) : '') +
       (r.warnings && r.warnings.length ? '<p class="muted small">Not updated (kept previous rate): ' + esc(r.warnings.join('; ')) + '</p>' : '') +
-      '<p class="muted small">Indian rate = international price &times; purity &times; (1 + import duty) &times; (1 + premium). GST is added on the bill. Compare with your local association (IBJA) rate and adjust the premium in Live rate settings if needed.</p></div>';
+      (r.basis === 'IBJA'
+        ? '<p class="muted small">IBJA benchmark rates include import duty and exclude GST (GST is added on the bill). Purities IBJA does not publish are worked out from the 999 rate by purity. Use the premium in Live rate settings to add your shop\'s margin over IBJA.</p></div>'
+        : '<p class="muted small">Indian rate = international price &times; purity &times; (1 + import duty) &times; (1 + premium). GST is added on the bill. Compare with the IBJA rate and adjust the premium in Live rate settings if needed.</p></div>');
   }
 
   function liveSettings(done) {
     const fields = [
       { name: 'liveProvider', label: 'Rate source', type: 'select', required: true, full: true, options: [
-        { value: 'AUTO', label: 'Internet: international spot price converted to Indian rate (free, no key)' },
+        { value: 'IBJA', label: 'IBJA India benchmark rates (free community feed; falls back to international if unavailable)' },
+        { value: 'AUTO', label: 'International spot price converted to Indian rate (free, no key)' },
         { value: 'CUSTOM', label: 'My own feed URL (JSON with G24K, G22K, S999 ...)' }] },
+      { name: 'ibjaUrl', label: 'IBJA feed URL', full: true, placeholder: 'https://ibja-api.vercel.app', help: 'Unofficial free service that republishes ibjarates.com. Change only if you host your own copy.' },
       { name: 'rateApiUrl', label: 'Custom feed URL', full: true, placeholder: 'https://example.com/rates.json', help: 'Only for "My own feed". Must allow browser access (CORS).' },
       { name: 'liveDutyGold', label: 'Gold import duty %', type: 'number', min: 0, step: 'any', help: '10% BCD + 5% AIDC = 15% since 13 May 2026' },
       { name: 'liveDutySilver', label: 'Silver import duty %', type: 'number', min: 0, step: 'any' },
@@ -89,7 +94,7 @@
           '<label class="rate-input ' + p.metalId.toLowerCase() + '"><span>' + esc(p.name) + '</span>' +
           '<input type="number" step="any" min="0" name="' + p.id + '" value="' + esc(cur[p.id] || '') + '"' + (canEdit ? '' : ' readonly') + '></label>').join('') + '</div>' +
         (canEdit ? '<div class="live-bar"><button type="button" class="btn live-btn" data-live>&#8635; Refresh live rates</button>' +
-          '<span class="muted small">' + esc(LiveRates.settings().provider === 'CUSTOM' ? 'From your feed' : 'From the internet, converted to Indian rates') +
+          '<span class="muted small">' + esc({ CUSTOM: 'From your feed', IBJA: 'IBJA India benchmark rates from the internet', AUTO: 'International price from the internet, converted to Indian rates' }[LiveRates.settings().provider] || '') +
           (LiveRates.settings().autoMins ? ' &middot; auto every ' + LiveRates.settings().autoMins + ' min' : '') + '</span>' +
           (Auth.can(['Admin']) ? '<button type="button" class="btn sm" data-livesettings>Live rate settings</button>' : '') + '</div>' +
           '<div class="actions-row">' +
