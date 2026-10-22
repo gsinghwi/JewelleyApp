@@ -224,7 +224,7 @@
   });
 
   const settings = {
-    shopName: 'Swarna Mahal Jewellers',
+    shopName: 'Nisarg Jewellers',
     tagline: 'Purity you can trust since 1985',
     loginWelcome: 'Welcome back! Sign in to manage sales, stock and customers.',
     logo: '',
@@ -233,7 +233,7 @@
     accentColor: '#c9a227',
     address: 'Shop No. 12, Laxmi Road, Pune 411030',
     phone: '020-24450000',
-    email: 'contact@swarnamahal.example',
+    email: 'contact@nisargjewellers.example',
     gstin: '27ABCDE1234F1Z5',
     pan: 'ABCDE1234F',
     bisLicence: 'HM/C-1234567',

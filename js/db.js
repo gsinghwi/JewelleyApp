@@ -21,6 +21,13 @@
         this.data = Seed.build();
         this.persist();
       }
+      // Browsers that saved the old demo shop name pick up the new default; a name set in Settings is kept
+      const s = this.data.settings;
+      if (s.shopName === 'Swarna Mahal Jewellers') {
+        s.shopName = 'Nisarg Jewellers';
+        if (s.email === 'contact@swarnamahal.example') s.email = 'contact@nisargjewellers.example';
+        this.persist();
+      }
       return this.data;
     },
 
