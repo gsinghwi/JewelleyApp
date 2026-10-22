@@ -89,7 +89,8 @@
         }
         onSuccess(u);
       });
-      setTimeout(() => form.username.focus(), 30);
+      // Only if the user (or a password manager) has not already started in another field
+      setTimeout(() => { if (!form.contains(document.activeElement)) form.username.focus(); }, 30);
     },
   };
 

@@ -45,7 +45,9 @@
     const latest = DB.latestRate();
     const v = latest.values || {};
     const show = [['G24K', '24K'], ['G22K', '22K'], ['G18K', '18K'], ['S999', 'Silver']];
-    return '<a class="ticker" href="#/rates" title="Latest rates per gram. Click to update.">' +
+    const live = /^Live/.test(latest.source || '');
+    return '<a class="ticker" href="#/rates" title="Latest rates per gram' + (live ? ' (live: ' + U.esc(latest.source.replace(/^Live: /, '')) + ')' : '') + '. Click to update.">' +
+      (live ? '<i class="live-dot">LIVE</i>' : '') +
       show.map(([k, l]) => '<span><b>' + l + '</b> ' + U.inr(v[k], { whole: true }) + '</span>').join('') +
       '<em>' + (latest.at ? 'as of ' + U.fmtDateTime(latest.at) : 'no rates set') + '</em></a>';
   }
@@ -116,7 +118,7 @@
     const act = e.target.closest('[data-act]');
     if (!act) return;
     e.preventDefault();
-    if (act.dataset.act === 'logout') { Auth.logout(); Branch.clearView(); history.replaceState(null, '', location.pathname); start(); }
+    if (act.dataset.act === 'logout') { LiveRates.stopAuto(); Auth.logout(); Branch.clearView(); history.replaceState(null, '', location.pathname); start(); }
     if (act.dataset.act === 'password') changePassword();
   });
 
@@ -167,16 +169,18 @@
     DB.load();
     applyTheme();
     if (!Auth.restore()) {
-      Auth.renderLogin(root, () => { renderShell(); route(); });
+      Auth.renderLogin(root, () => { renderShell(); route(); LiveRates.startAuto(); });
       return;
     }
     renderShell();
     route();
+    LiveRates.startAuto();
   }
 
   global.App = {
     start, route, applyTheme,
     refreshShell() { applyTheme(); renderShell(); route(); },
+    updateTicker() { const t = root.querySelector('.ticker-slot'); if (t) t.innerHTML = rateTicker(); },
     go(hash) { if (location.hash === hash) route(); else location.hash = hash; },
   };
 

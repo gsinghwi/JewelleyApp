@@ -55,7 +55,7 @@
       wrap.closeModal = close;
       document.body.appendChild(wrap);
       const first = wrap.querySelector('input:not([type=hidden]):not([readonly]), select, textarea');
-      if (first) setTimeout(() => first.focus(), 30);
+      if (first) setTimeout(() => { if (!wrap.contains(document.activeElement)) first.focus(); }, 30);
       if (onOpen) onOpen(wrap, close);
       return { el: wrap, close };
     },

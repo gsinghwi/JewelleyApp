@@ -395,7 +395,7 @@
       renderPayments();
       renderOG();
       renderLines();
-      setTimeout(() => $('.scan').focus(), 50);
+      setTimeout(() => { const a = document.activeElement; if (!a || a === document.body) $('.scan').focus(); }, 50);
     },
   });
 })();

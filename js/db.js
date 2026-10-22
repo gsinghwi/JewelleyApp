@@ -35,6 +35,8 @@
     // Bring data saved by an older version of the app up to date
     migrate() {
       const d = this.data;
+      // A feed URL configured before live rates existed keeps being used
+      if (d.settings.liveProvider === undefined && d.settings.rateApiUrl) d.settings.liveProvider = 'CUSTOM';
       Object.keys(Seed.settings).forEach((k) => { if (d.settings[k] === undefined) d.settings[k] = Seed.settings[k]; });
       if (!d.waTemplates) {
         d.waTemplates = Seed.waTemplates.map((t) => Object.assign({}, t));

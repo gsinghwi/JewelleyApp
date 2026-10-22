@@ -340,6 +340,20 @@ a.kpi-link:hover { border-color: var(--accent); }
 .mini-kpis b { font-size: 16px; font-variant-numeric: tabular-nums; }
 .mini-kpis small { color: var(--muted); font-size: 11px; }
 
+/* ---------- live rates ---------- */
+.live-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-top: 12px; border: 1px dashed rgba(var(--primary-rgb), .35); border-radius: 8px; background: rgba(var(--primary-rgb), .03); }
+.live-bar .muted { flex: 1; min-width: 160px; }
+.live-btn { background: #fff; border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.live-btn:disabled { opacity: .7; cursor: progress; }
+.live-detail .card-head { margin-bottom: 4px; }
+.rate-inputs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.rate-input { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(135deg, #fffaf0, #fff); }
+.rate-input.silver { background: linear-gradient(135deg, #f3f4f6, #fff); }
+.rate-input.platinum { background: linear-gradient(135deg, #eef2f6, #fff); }
+.rate-input span { font-size: 12px; color: var(--muted); }
+.rate-input input { font-size: 16px; font-weight: 600; color: var(--primary); }
+.live-dot { font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .5px; color: #fff; background: #16a34a; border-radius: 999px; padding: 1px 6px; }
+
 /* ---------- invoice ---------- */
 .invoice-preview { background: #fff; }
 .invoice { position: relative; color: #222; font-size: 12.5px; }

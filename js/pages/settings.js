@@ -28,7 +28,6 @@
     { name: 'tagPrefix', label: 'Stock tag prefix', required: true },
     { name: 'hallmarkCharge', label: 'Default hallmark charge per piece (₹)', type: 'number', min: 0 },
     { name: 'terms', label: 'Invoice terms & conditions', type: 'textarea', rows: 5, full: true },
-    { name: 'rateApiUrl', label: 'Live rate feed URL (optional)', full: true, help: 'Should return JSON like {"G24K": 12850, "G22K": 11780, "S999": 165}. Adds a "Fetch live rate" button on the Rates screen.' },
     { name: 'showDemoHint', label: 'Show demo logins on the sign-in page', type: 'checkbox', full: true },
   ];
 

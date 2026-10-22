@@ -48,7 +48,7 @@ Demo logins (change them under **Branches & Access** or **Settings → Users**):
 |--------|--------------|
 | **Login** | Branded with the shop's logo, name, tagline, colours, background image and welcome message (set in Settings). |
 | **Dashboard** | Today's and this month's sales, stock in hand and its value at today's rate, customer dues, vendor payables, today's rates, a 7-day sales chart, recent bills, upcoming birthdays and anniversaries, and low-stock alerts. |
-| **Today's Rates** | Enter the gold, silver and platinum rates per gram for every purity. "Auto-fill" works out 22K, 18K and 14K from 24K, and 925 silver from 999. Every rate change is kept in a history with a trend chart. Billing uses the latest saved rate, and it shows in the top bar on every screen. |
+| **Today's Rates** | **Refresh live rates** gets gold, silver and platinum prices from the internet and converts them to Indian rates for every purity, saving them in one click. The screen shows a breakdown of the calculation, and auto-refresh is optional. Rates can also be entered by hand. See *Live rates* below. Enter the gold, silver and platinum rates per gram for every purity. "Auto-fill" works out 22K, 18K and 14K from 24K, and 925 silver from 999. Every rate change is kept in a history with a trend chart. Billing uses the latest saved rate, and it shows in the top bar on every screen. |
 | **New Sale / Billing (POS)** | Scan a QR sticker with the camera (**Scan QR**: keeps scanning, so several pieces can be added in a row; a photo also works), use a USB/Bluetooth QR scanner, type a tag number or HUID, or browse stock. Each line is priced as net weight × rate + wastage/VA + making charge (percent, per gram or flat) + stone value + hallmark charge. Rate, making and VA can be edited per line. Customer-group making discounts apply automatically. The bill also handles discounts, old-gold exchange (deducted after GST), CGST/SGST or IGST, split payments and balance due. On save the invoice prints. |
 | **Online Payments** (Admin, Manager) | Every online payment attempt: date, gateway payment and order IDs, customer, method (UPI / card network and last 4 digits / bank / wallet), amount, status (paid, authorized, failed, refunded), test or live, and the bill or receipt it belongs to. Filters, CSV export, a detail view, and "Mark refunded" for cancelled bills or unlinked payments. |
 | **Sales & Invoices** | Search and filter bills, then view or print the branded GST tax invoice (with HUIDs and the amount in words), take payment against a due, or cancel a bill (its stock returns to inventory). |
@@ -117,6 +117,7 @@ JewelleryApp/
     ├── seed.js            # Indian item master and demo data
     ├── db.js              # data layer: the only file that touches storage
     ├── branch.js          # branches: current branch view, access filter, document series
+    ├── liverates.js       # live rates from the internet: spot price -> Indian rate per purity
     ├── ui.js              # modal, toast, forms, tables, generic master CRUD
     ├── auth.js            # login, roles, branded login page
     ├── biz.js             # shared business helpers
@@ -136,6 +137,16 @@ JewelleryApp/
 - Each piece's QR code contains just its tag number (e.g. `T1001`). The same sticker works with the in-app camera scanner and with any USB/Bluetooth QR scanner gun, which types the code into the scan box.
 - **Camera scanning** needs the app to be opened over `https` (for example the GitHub Pages link) or from `localhost`. Some browsers block the camera when `index.html` is opened directly as a file; **Scan from a photo** works everywhere.
 - **Thermal label printers** (TSC, Zebra, Argox, TVS, …): in the print window, pick the label printer, set the paper size to the sticker size and margins to none. **A4 label sheets:** print at 100% / Actual size.
+
+## Live rates
+
+**Refresh live rates** on the Rates screen (head office Admin / Manager) fetches today's prices and saves them as the new rate for all branches. A green **LIVE** tag in the top bar shows the current rate came from the internet.
+
+- **Default source (free, no API key):** the international spot price per troy ounce from [gold-api.com](https://gold-api.com), converted to rupees with the day's USD/INR rate from the [fawazahmed0 currency API](https://github.com/fawazahmed0/exchange-api) (jsDelivr, with a Cloudflare mirror). If gold-api.com cannot be reached, it falls back to that API's daily gold/silver/platinum prices in INR.
+- **Indian rate per gram** = spot price ÷ 31.1035 g × purity (e.g. 916/1000) × (1 + import duty) × (1 + local premium). The default import duty is **15%** (10% basic customs duty + 5% AIDC, effective 13 May 2026). Check this against the latest CBIC notification and adjust it, together with the premium, under **Live rate settings** so the result matches your local association (IBJA) rate. GST is not included; it is added on the bill.
+- **Your own feed:** choose "My own feed URL" and give a URL that returns JSON keyed by purity code, e.g. `{"G24K": 12850, "G22K": 11780, "S999": 165}` (also accepted inside `rates` or `data`). The URL must allow browser access (CORS).
+- **Auto-refresh:** optionally refresh every N minutes (minimum 5) while the app is open at head office. A new history entry is added only when a rate changes.
+- **If the internet is down,** the previous rates stay in use and rates can still be typed in by hand. Metals a source does not return keep their last rate.
 
 ## Pawn / girvi interest
 

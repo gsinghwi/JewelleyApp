@@ -22,6 +22,55 @@
       '<text x="' + (w - pad) + '" y="' + (h - 8) + '" text-anchor="end" class="axis">' + U.fmtDate(pts[pts.length - 1].at) + '</text></svg>';
   }
 
+  let lastLive = null; // breakdown of the most recent live refresh, shown under the form
+
+  function liveDetail(r) {
+    if (!r) return '';
+    return '<div class="live-detail"><div class="card-head"><h3>How the live rates were worked out</h3><small class="muted">' + esc(U.fmtDateTime(r.fetchedAt)) + '</small></div>' +
+      '<p class="small">Source: <b>' + esc(r.source) + '</b>' + (r.spotAt ? ' &middot; price time ' + esc(U.fmtDateTime(r.spotAt)) : '') + '</p>' +
+      (r.lines.length ? UI.table({
+        columns: [
+          { label: 'Purity', key: 'purity' },
+          { label: 'International \u20B9/g', align: 'right', render: (l) => U.num(l.spotPerGram, 2) },
+          { label: '+ Import duty', align: 'right', render: (l) => l.duty + '%' },
+          { label: '+ Premium', align: 'right', render: (l) => l.premium + '%' },
+          { label: 'Indian rate \u20B9/g', align: 'right', render: (l) => '<b>' + U.num(l.rate, 2) + '</b>' },
+        ],
+        rows: r.lines,
+      }) : '') +
+      (r.warnings && r.warnings.length ? '<p class="muted small">Not updated (kept previous rate): ' + esc(r.warnings.join('; ')) + '</p>' : '') +
+      '<p class="muted small">Indian rate = international price &times; purity &times; (1 + import duty) &times; (1 + premium). GST is added on the bill. Compare with your local association (IBJA) rate and adjust the premium in Live rate settings if needed.</p></div>';
+  }
+
+  function liveSettings(done) {
+    const fields = [
+      { name: 'liveProvider', label: 'Rate source', type: 'select', required: true, full: true, options: [
+        { value: 'AUTO', label: 'Internet: international spot price converted to Indian rate (free, no key)' },
+        { value: 'CUSTOM', label: 'My own feed URL (JSON with G24K, G22K, S999 ...)' }] },
+      { name: 'rateApiUrl', label: 'Custom feed URL', full: true, placeholder: 'https://example.com/rates.json', help: 'Only for "My own feed". Must allow browser access (CORS).' },
+      { name: 'liveDutyGold', label: 'Gold import duty %', type: 'number', min: 0, step: 'any', help: '10% BCD + 5% AIDC = 15% since 13 May 2026' },
+      { name: 'liveDutySilver', label: 'Silver import duty %', type: 'number', min: 0, step: 'any' },
+      { name: 'liveDutyPlatinum', label: 'Platinum import duty %', type: 'number', min: 0, step: 'any' },
+      { name: 'livePremiumPct', label: 'Local premium / discount %', type: 'number', step: 'any', help: 'Use a negative value for a discount to the calculated rate' },
+      { name: 'liveAutoMins', label: 'Auto-refresh every (minutes)', type: 'number', min: 0, step: 1, help: '0 = only when you click Refresh. Runs while the app is open at head office.' },
+    ];
+    UI.modal({
+      title: 'Live rate settings', size: 'wide', body: UI.formHtml(fields, DB.settings),
+      actions: [{ label: 'Cancel' }, {
+        label: 'Save', cls: 'btn primary', onClick: (el) => {
+          const d = UI.readForm(el, fields);
+          if (!d) return false;
+          if (d.liveProvider === 'CUSTOM' && !/^https?:\/\//.test(d.rateApiUrl)) { UI.toast('Enter the feed URL (https://...)', 'error'); return false; }
+          if (d.liveAutoMins && d.liveAutoMins < 5) { UI.toast('Auto-refresh must be at least every 5 minutes', 'error'); return false; }
+          DB.saveSettings(d);
+          LiveRates.startAuto();
+          UI.toast('Live rate settings saved');
+          if (done) done();
+        },
+      }],
+    });
+  }
+
   Pages.register({
     id: 'rates', title: "Today's Rates", icon: '&#8377;',
     render(el) {
@@ -39,17 +88,20 @@
         '<div class="rate-inputs">' + purities.map((p) =>
           '<label class="rate-input ' + p.metalId.toLowerCase() + '"><span>' + esc(p.name) + '</span>' +
           '<input type="number" step="any" min="0" name="' + p.id + '" value="' + esc(cur[p.id] || '') + '"' + (canEdit ? '' : ' readonly') + '></label>').join('') + '</div>' +
-        (canEdit ? '<div class="actions-row">' +
+        (canEdit ? '<div class="live-bar"><button type="button" class="btn live-btn" data-live>&#8635; Refresh live rates</button>' +
+          '<span class="muted small">' + esc(LiveRates.settings().provider === 'CUSTOM' ? 'From your feed' : 'From the internet, converted to Indian rates') +
+          (LiveRates.settings().autoMins ? ' &middot; auto every ' + LiveRates.settings().autoMins + ' min' : '') + '</span>' +
+          (Auth.can(['Admin']) ? '<button type="button" class="btn sm" data-livesettings>Live rate settings</button>' : '') + '</div>' +
+          '<div class="actions-row">' +
           '<button type="button" class="btn" data-derive>Auto-fill from 24K &amp; Fine Silver</button>' +
-          (DB.settings.rateApiUrl ? '<button type="button" class="btn" data-fetch>Fetch live rate</button>' : '') +
           '<span class="spacer"></span><button type="button" class="btn primary" data-save>Save rates</button></div>' +
-          '<p class="muted small">Saved rates are used immediately on new bills. ' +
-          (DB.settings.rateApiUrl ? '' : 'You can connect a live rate feed in Settings &rarr; Rate feed.') + '</p>' : '') +
+          '<p class="muted small">Saved rates are used immediately on new bills. You can also type rates by hand and Save.</p>' : '') +
         '<p class="muted small">Last updated: ' + (latest.at ? U.fmtDateTime(latest.at) + ' by ' + esc(latest.by || '-') + ' (' + esc(latest.source || '') + ')' : 'never') + '</p>' +
         '</form></section>' +
         '<section class="card"><div class="card-head"><h3>Trend</h3>' +
         '<select class="chart-key">' + purities.map((p) => '<option value="' + p.id + '"' + (p.id === chartKey ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select></div>' +
         '<div class="chart-box"></div></section></div>' +
+        (canEdit && lastLive ? '<section class="card">' + liveDetail(lastLive) + '</section>' : '') +
         '<section class="card"><div class="card-head"><h3>Rate history</h3></div>' +
         UI.table({
           columns: [{ label: 'Date & time', render: (r) => U.fmtDateTime(r.at) }]
@@ -73,16 +125,21 @@
         });
         UI.toast('Derived from purity (fineness). Adjust to your market rate if needed.');
       });
-      const fetchBtn = el.querySelector('[data-fetch]');
-      if (fetchBtn) fetchBtn.addEventListener('click', async () => {
+      const ls = el.querySelector('[data-livesettings]');
+      if (ls) ls.addEventListener('click', () => liveSettings(() => App.route()));
+      el.querySelector('[data-live]').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = 'Checking the internet...';
         try {
-          const res = await fetch(DB.settings.rateApiUrl);
-          const json = await res.json();
-          let n = 0;
-          purities.forEach((p) => { if (json[p.id]) { form[p.id].value = json[p.id]; n++; } });
-          UI.toast(n ? 'Fetched ' + n + ' rate(s). Review and Save.' : 'Feed returned no matching rates', n ? 'ok' : 'error');
-        } catch (e) {
-          UI.toast('Could not fetch rates: ' + e.message, 'error');
+          const r = await LiveRates.refresh({ force: true });
+          lastLive = Object.assign(r, { fetchedAt: new Date().toISOString() });
+          UI.toast('Live rates applied: 24K ' + U.inr(r.values.G24K, { whole: true }) + ', 22K ' + U.inr(r.values.G22K, { whole: true }) + ' per gram');
+          App.route();
+        } catch (err) {
+          UI.toast('Could not get live rates: ' + err.message + ' You can still enter rates by hand.', 'error');
+          btn.disabled = false;
+          btn.innerHTML = '&#8635; Refresh live rates';
         }
       });
       el.querySelector('[data-save]').addEventListener('click', () => {
