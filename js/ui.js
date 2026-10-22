@@ -52,6 +52,7 @@
       wrap.querySelector('[data-close]').addEventListener('click', close);
       wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) close(); });
       document.addEventListener('keydown', onKey);
+      wrap.closeModal = close;
       document.body.appendChild(wrap);
       const first = wrap.querySelector('input:not([type=hidden]):not([readonly]), select, textarea');
       if (first) setTimeout(() => first.focus(), 30);

@@ -130,6 +130,8 @@
     root.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === page.id));
     root.querySelector('.page-title').textContent = page.title;
     root.querySelector('.ticker-slot').innerHTML = rateTicker();
+    // Pop-ups belong to the screen that opened them
+    document.querySelectorAll('.modal-wrap').forEach((m) => (m.closeModal ? m.closeModal() : m.remove()));
     // Fresh element per page so listeners a page attaches to its view never outlive it
     const old = root.querySelector('#view');
     const view = old.cloneNode(false);

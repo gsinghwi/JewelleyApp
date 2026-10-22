@@ -135,6 +135,9 @@
           DB.persist();
           UI.toast(purchase.purchaseNo + ' saved: ' + valid.length + ' piece(s) added to stock');
           if (onDone) onDone();
+          UI.confirm('Print QR stickers for the ' + valid.length + ' new piece(s) now?', 'Print stickers').then((yes) => {
+            if (yes) QR.printDialog(purchase.lines.map((l) => DB.get('stock', l.stockId)).filter(Boolean));
+          });
         },
       }],
     });
@@ -156,6 +159,11 @@
         }) +
         '<div class="totals-box"><div><span>Cost</span><b>' + U.inr(p.subTotal) + '</b></div><div><span>GST</span><b>' + U.inr(p.gst) + '</b></div>' +
         '<div class="grand"><span>Total</span><b>' + U.inr(p.total) + '</b></div><div><span>Paid at purchase</span><b>' + U.inr(p.paid) + '</b></div></div>',
+      actions: [{ label: 'Close' }, {
+        label: 'Print QR stickers', cls: 'btn primary', onClick: () => {
+          QR.printDialog(p.lines.map((l) => DB.get('stock', l.stockId)).filter((s) => s && s.status === 'IN_STOCK'));
+        },
+      }],
     });
   }
 

@@ -39,6 +39,7 @@
         '</div><div class="cust-info muted small"></div></section>' +
         '<section class="card"><div class="toolbar wrap">' +
         '<input class="scan grow" placeholder="Scan barcode or type Tag no. / HUID and press Enter" autocomplete="off">' +
+        '<button class="btn" data-scanqr>&#9638; Scan QR (camera)</button>' +
         '<button class="btn" data-browse>Browse stock</button>' +
         '<button class="btn" data-refresh-rates title="Re-price all lines with the latest saved rates">Apply latest rates</button></div>' +
         '<div class="rates-used small muted"></div><div class="pos-lines"></div></section>' +
@@ -155,10 +156,17 @@
         return inv;
       }
 
-      function addPiece(piece) {
-        if (!piece) { UI.toast('No stock found for that tag / HUID', 'error'); return; }
-        if (piece.status !== 'IN_STOCK') { UI.toast(piece.tagNo + ' is already sold', 'error'); return; }
-        if (draft.lines.some((l) => l.stockId === piece.id)) { UI.toast(piece.tagNo + ' is already on this bill', 'error'); return; }
+      const findPiece = (code) => {
+        const v = String(code || '').trim().toLowerCase();
+        return v ? DB.find('stock', (s) => s.tagNo.toLowerCase() === v || (s.huid && s.huid.toLowerCase() === v)) : null;
+      };
+
+      // Returns {ok, message} so the camera scanner can list each result
+      function addPiece(piece, quiet) {
+        const fail = (message) => { if (!quiet) UI.toast(message, 'error'); return { ok: false, message }; };
+        if (!piece) return fail('No stock found for that tag / HUID');
+        if (piece.status !== 'IN_STOCK') return fail(piece.tagNo + ' is already sold');
+        if (draft.lines.some((l) => l.stockId === piece.id)) return fail(piece.tagNo + ' is already on this bill');
         const item = Biz.item(piece.itemId);
         const line = Pricing.lineFromStock(piece, item, Biz.hsn(item.hsn), DB.currentRates());
         line.baseMakingValue = line.makingValue;
@@ -166,6 +174,7 @@
         draft.lines.push(line);
         if (item.pricing === 'WEIGHT' && !U.n(line.rate)) UI.toast('No rate saved for ' + Biz.purityName(line.purityId) + '. Enter the rate on the line.', 'error');
         renderLines();
+        return { ok: true, message: 'added: ' + item.name + (item.pricing === 'FIXED' ? '' : ', ' + U.num(piece.netWt) + ' g') };
       }
 
       function browseStock() {
@@ -273,7 +282,7 @@
         e.preventDefault();
         const v = e.target.value.trim().toLowerCase();
         if (!v) return;
-        addPiece(DB.find('stock', (s) => s.tagNo.toLowerCase() === v || (s.huid && s.huid.toLowerCase() === v)));
+        addPiece(findPiece(v));
         e.target.value = '';
       });
 
@@ -322,7 +331,8 @@
           last.amount = U.r2(U.n(last.amount) + inv.balance);
           renderPayments();
           recalc();
-        } else if ('browse' in d) browseStock();
+        } else if ('scanqr' in d) QR.scanner((code) => addPiece(findPiece(code), true));
+        else if ('browse' in d) browseStock();
         else if ('newCust' in d) quickCustomer();
         else if ('refreshRates' in d) {
           const rates = DB.currentRates();

@@ -83,22 +83,12 @@
     });
   }
 
-  function tagLabels(pieces) {
-    const s = DB.settings;
-    return '<div class="tags-print">' + pieces.map((p) => {
-      const it = Biz.item(p.itemId);
-      return '<div class="tag-label"><b>' + esc(s.shopName) + '</b><span class="tag-no">' + esc(p.tagNo) + '</span>' +
-        '<span>' + esc(it.name) + '</span><span>' + esc(Biz.purityName(p.purityId)) + (p.huid ? ' &middot; HUID ' + esc(p.huid) : '') + '</span>' +
-        (it.pricing === 'FIXED' ? '<span>MRP ' + U.inr(p.fixedPrice, { whole: true }) + '</span>' :
-          '<span>G ' + U.num(p.grossWt) + ' &middot; N ' + U.num(p.netWt) + '</span>') + '</div>';
-    }).join('') + '</div>';
-  }
-
   Pages.register({
     id: 'stock', title: 'Stock', icon: '&#9670;',
     render(el) {
       const canEdit = Auth.can(['Admin', 'Manager']);
       const state = { q: '', cat: '', purity: '', status: 'IN_STOCK', loc: '' };
+      const selected = new Set(); // pieces ticked for QR sticker printing
       el.innerHTML =
         '<section class="card">' +
         '<div class="toolbar wrap">' +
@@ -107,7 +97,7 @@
         '<select data-f="purity"><option value="">All purities</option>' + DB.all('purities').map((p) => '<option value="' + p.id + '">' + esc(p.name) + '</option>').join('') + '</select>' +
         '<select data-f="status"><option value="IN_STOCK">In stock</option><option value="SOLD">Sold</option><option value="">All</option></select>' +
         '<span class="spacer"></span>' +
-        '<button class="btn" data-print>Print tags</button>' +
+        '<button class="btn" data-print>Print QR stickers</button>' +
         (canEdit ? '<a class="btn" href="#/purchases?new=1">Purchase entry</a><button class="btn primary" data-add>+ Add piece</button>' : '') +
         '</div><div class="stock-summary"></div><div class="stock-body"></div></section>';
 
@@ -132,9 +122,12 @@
           '<span>Gross <b>' + U.wt(U.sum(rows, 'grossWt')) + '</b></span>' +
           '<span>Net <b>' + U.wt(U.sum(rows, 'netWt')) + '</b></span>' +
           '<span>Stone value <b>' + U.inr(U.sum(rows, 'stoneValue'), { whole: true }) + '</b></span>' +
-          '<span>Value at today\'s rate <b>' + U.inr(value, { whole: true }) + '</b></span>';
+          '<span>Value at today\'s rate <b>' + U.inr(value, { whole: true }) + '</b></span>' +
+          '<span class="spacer"></span><span>' + (selected.size ? '<b>' + selected.size + '</b> ticked for stickers &middot; <a href="#" data-clear>clear</a>' : '<a href="#" data-selall>Tick all shown for stickers</a>') + '</span>';
+        el.querySelector('[data-print]').textContent = 'Print QR stickers' + (selected.size ? ' (' + selected.size + ')' : '');
         el.querySelector('.stock-body').innerHTML = UI.table({
           columns: [
+            { label: '', render: (s) => (s.status === 'IN_STOCK' ? '<input type="checkbox" data-sel="' + s.id + '" title="Tick to print sticker"' + (selected.has(s.id) ? ' checked' : '') + '>' : '') },
             { label: 'Tag', render: (s) => '<b>' + esc(s.tagNo) + '</b>' },
             { label: 'Item', render: (s) => esc(Biz.item(s.itemId).name) + (s.stoneDetails ? '<br><small class="muted">' + esc(s.stoneDetails) + '</small>' : '') },
             { label: 'Purity', render: (s) => esc(Biz.purityName(s.purityId)) },
@@ -147,7 +140,7 @@
             { label: 'Value today', align: 'right', render: (s) => U.inr(Biz.pieceValue(s, rates), { whole: true }) },
             { label: 'Status', render: (s) => (s.status === 'SOLD' ? UI.badge('Sold') : UI.badge('In stock', 'ok')) },
             {
-              label: '', align: 'right', render: (s) => (canEdit && s.status === 'IN_STOCK'
+              label: '', align: 'right', render: (s) => '<button class="icon-btn qr-btn" data-qr="' + s.id + '" title="QR code">&#9638;</button>' + (canEdit && s.status === 'IN_STOCK'
                 ? '<button class="icon-btn" data-edit="' + s.id + '" title="Edit">&#9998;</button><button class="icon-btn danger" data-del="' + s.id + '" title="Delete">&#128465;</button>' : ''),
             },
           ],
@@ -156,14 +149,23 @@
       }
 
       el.querySelectorAll('[data-f]').forEach((inp) => inp.addEventListener('input', U.debounce(() => { state[inp.dataset.f] = inp.value.trim(); draw(); }, 120)));
+      // Prints ticked pieces, or every in-stock piece currently shown when nothing is ticked
       el.querySelector('[data-print]').addEventListener('click', () => {
-        const rows = filtered().filter((s) => s.status === 'IN_STOCK');
+        const rows = selected.size ? DB.all('stock').filter((s) => selected.has(s.id)) : filtered().filter((s) => s.status === 'IN_STOCK');
         if (!rows.length) { UI.toast('No in-stock pieces to print', 'error'); return; }
-        UI.print(tagLabels(rows));
+        QR.printDialog(rows.sort((a, b) => (a.tagNo < b.tagNo ? -1 : 1)));
+      });
+      el.querySelector('.stock-summary').addEventListener('click', (e) => {
+        if (e.target.closest('[data-selall]')) { e.preventDefault(); filtered().filter((s) => s.status === 'IN_STOCK').forEach((s) => selected.add(s.id)); draw(); }
+        if (e.target.closest('[data-clear]')) { e.preventDefault(); selected.clear(); draw(); }
       });
       const add = el.querySelector('[data-add]');
       if (add) add.addEventListener('click', () => openPiece(null, draw));
       el.querySelector('.stock-body').addEventListener('click', async (e) => {
+        const sel = e.target.closest('[data-sel]');
+        if (sel) { if (sel.checked) selected.add(sel.dataset.sel); else selected.delete(sel.dataset.sel); draw(); return; }
+        const qr = e.target.closest('[data-qr]');
+        if (qr) { QR.show(DB.get('stock', qr.dataset.qr)); return; }
         const ed = e.target.closest('[data-edit]');
         const del = e.target.closest('[data-del]');
         if (ed) openPiece(DB.get('stock', ed.dataset.edit), draw);

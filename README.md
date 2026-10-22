@@ -36,12 +36,12 @@ Demo logins (change them under **Settings → Users**):
 | **Login** | Branded with the shop's logo, name, tagline, colours, background image and welcome message (set in Settings). |
 | **Dashboard** | Today's and this month's sales, stock in hand and its value at today's rate, customer dues, vendor payables, today's rates, a 7-day sales chart, recent bills, upcoming birthdays and anniversaries, and low-stock alerts. |
 | **Today's Rates** | Enter the gold, silver and platinum rates per gram for every purity. "Auto-fill" works out 22K, 18K and 14K from 24K, and 925 silver from 999. Every rate change is kept in a history with a trend chart. Billing uses the latest saved rate, and it shows in the top bar on every screen. |
-| **New Sale / Billing (POS)** | Scan or type a tag number or HUID, or browse stock. Each line is priced as net weight × rate + wastage/VA + making charge (percent, per gram or flat) + stone value + hallmark charge. Rate, making and VA can be edited per line. Customer-group making discounts apply automatically. The bill also handles discounts, old-gold exchange (deducted after GST), CGST/SGST or IGST, split payments and balance due. On save the invoice prints. |
+| **New Sale / Billing (POS)** | Scan a QR sticker with the camera (**Scan QR**: keeps scanning, so several pieces can be added in a row; a photo also works), use a USB/Bluetooth QR scanner, type a tag number or HUID, or browse stock. Each line is priced as net weight × rate + wastage/VA + making charge (percent, per gram or flat) + stone value + hallmark charge. Rate, making and VA can be edited per line. Customer-group making discounts apply automatically. The bill also handles discounts, old-gold exchange (deducted after GST), CGST/SGST or IGST, split payments and balance due. On save the invoice prints. |
 | **Sales & Invoices** | Search and filter bills, then view or print the branded GST tax invoice (with HUIDs and the amount in words), take payment against a due, or cancel a bill (its stock returns to inventory). |
 | **WhatsApp** (Admin only) | **Wishes:** lists customers whose birthday or anniversary is due in 7 days (adjustable), with a send button for each and "Send all"; the dashboard also reminds you. **Promotional broadcast:** to all customers, by group or city, and/or all vendors. Contacts without a valid mobile, who haven't agreed to receive WhatsApp messages, or with a duplicate number are left out automatically. **Templates:** with `{name}`, `{shop}`, `{date}` and similar placeholders. **Message log:** with CSV export. |
 | **Customers** | Customer list and profile: contact details, group, PAN/GSTIN, birthday, anniversary, ring size, notes, purchase history, payments and outstanding. Payments received are set against the oldest open bills first. |
-| **Stock** | Every tagged piece with item, purity, gross/stone/net weight, stone details and value, HUID, vendor, location and value at today's rate. You can filter, add or edit pieces, and print tag labels. |
-| **Purchases** | Stock inward from a vendor: one row per piece, with tags generated automatically and GST on the purchase. Also records vendor payments. |
+| **Stock** | Every tagged piece with item, purity, gross/stone/net weight, stone details and value, HUID, vendor, location and value at today's rate. You can filter, add or edit pieces, view each piece's **QR code**, and **print QR stickers** for the pieces you tick (or every piece shown). Stickers come in three sizes: jewellery dumbbell tag 95×12 mm, 50×25 mm label, or an A4 sheet of 65 labels. You choose which details appear and the number of copies. |
+| **Purchases** | Stock inward from a vendor: one row per piece, with tags generated automatically and GST on the purchase. After saving, the app offers to print QR stickers for the new pieces. Also records vendor payments. |
 | **Vendors** | Supplier list with a ledger for each (purchases, payments and amount payable). |
 | **Master Data** | One screen for every master list: Item Master, Categories, Metals, Purity/Karat, HSN & GST, Stone Types, Payment Modes, Customer Groups, Customers, Vendors, and Users & Roles. Every list has search, add, edit, delete (blocked while a record is in use), and CSV export and import. |
 | **Reports** | Any date range, with quick presets (today, this month, this financial year, …). Every report exports to CSV and prints or saves as PDF. |
@@ -105,10 +105,18 @@ JewelleryApp/
     ├── biz.js             # shared business helpers
     ├── schemas.js         # field and column definitions for every master
     ├── whatsapp.js        # WhatsApp sending (click-to-chat links and Cloud API)
+    ├── qr.js              # QR codes: stickers, printing, camera scanner
+    ├── vendor/            # qrcode-generator 1.4.4 (MIT), jsQR 1.4.0 (Apache-2.0)
     ├── app.js             # app shell, navigation, router
     └── pages/             # dashboard, rates, pos, sales, customers, stock,
                            # purchases, vendors, reports, masters, settings, whatsapp
 ```
+
+## QR codes
+
+- Each piece's QR code contains just its tag number (e.g. `T1001`). The same sticker works with the in-app camera scanner and with any USB/Bluetooth QR scanner gun, which types the code into the scan box.
+- **Camera scanning** needs the app to be opened over `https` (for example the GitHub Pages link) or from `localhost`. Some browsers block the camera when `index.html` is opened directly as a file; **Scan from a photo** works everywhere.
+- **Thermal label printers** (TSC, Zebra, Argox, TVS, …): in the print window, pick the label printer, set the paper size to the sticker size and margins to none. **A4 label sheets:** print at 100% / Actual size.
 
 ## WhatsApp
 
@@ -124,4 +132,4 @@ The app runs only while it is open, so birthday wishes are not sent on their own
 - **Storage:** data is kept in the browser (`localStorage`) on the computer where the app is used. Take regular backups (Settings → Download backup). To share data across counters or branches, replace `js/db.js` with calls to a backend API and database (for example Node or Django with PostgreSQL). All screens go through `DB`, so nothing else needs to change.
 - **Security:** sign-in is checked inside the browser with salted SHA-256 hashes, which is fine for a demo. A production version needs server-side authentication.
 - **Live rates:** set **Settings → Live rate feed URL** to an endpoint that returns JSON such as `{"G24K": 12850, "G22K": 11780, "S999": 165}`.
-- **Possible additions:** scheduled automatic WhatsApp sending from a server, barcode printer integration, sending bills on WhatsApp, SMS, e-invoicing/IRN, gold saving schemes, repair and custom orders, karigar job work and multi-branch support.
+- **Possible additions:** scheduled automatic WhatsApp sending from a server, direct printing to label printers (raw TSPL/ZPL, no print dialog), sending bills on WhatsApp, SMS, e-invoicing/IRN, gold saving schemes, repair and custom orders, karigar job work and multi-branch support.
