@@ -38,6 +38,7 @@ Demo logins (change them under **Settings → Users**):
 | **Today's Rates** | Enter the gold, silver and platinum rates per gram for every purity. "Auto-fill" works out 22K, 18K and 14K from 24K, and 925 silver from 999. Every rate change is kept in a history with a trend chart. Billing uses the latest saved rate, and it shows in the top bar on every screen. |
 | **New Sale / Billing (POS)** | Scan or type a tag number or HUID, or browse stock. Each line is priced as net weight × rate + wastage/VA + making charge (percent, per gram or flat) + stone value + hallmark charge. Rate, making and VA can be edited per line. Customer-group making discounts apply automatically. The bill also handles discounts, old-gold exchange (deducted after GST), CGST/SGST or IGST, split payments and balance due. On save the invoice prints. |
 | **Sales & Invoices** | Search and filter bills, then view or print the branded GST tax invoice (with HUIDs and the amount in words), take payment against a due, or cancel a bill (its stock returns to inventory). |
+| **WhatsApp** (Admin only) | **Wishes:** lists customers whose birthday or anniversary is due in 7 days (adjustable), with a send button for each and "Send all"; the dashboard also reminds you. **Promotional broadcast:** to all customers, by group or city, and/or all vendors. Contacts without a valid mobile, who haven't agreed to receive WhatsApp messages, or with a duplicate number are left out automatically. **Templates:** with `{name}`, `{shop}`, `{date}` and similar placeholders. **Message log:** with CSV export. |
 | **Customers** | Customer list and profile: contact details, group, PAN/GSTIN, birthday, anniversary, ring size, notes, purchase history, payments and outstanding. Payments received are set against the oldest open bills first. |
 | **Stock** | Every tagged piece with item, purity, gross/stone/net weight, stone details and value, HUID, vendor, location and value at today's rate. You can filter, add or edit pieces, and print tag labels. |
 | **Purchases** | Stock inward from a vendor: one row per piece, with tags generated automatically and GST on the purchase. Also records vendor payments. |
@@ -103,14 +104,24 @@ JewelleryApp/
     ├── auth.js            # login, roles, branded login page
     ├── biz.js             # shared business helpers
     ├── schemas.js         # field and column definitions for every master
+    ├── whatsapp.js        # WhatsApp sending (click-to-chat links and Cloud API)
     ├── app.js             # app shell, navigation, router
     └── pages/             # dashboard, rates, pos, sales, customers, stock,
-                           # purchases, vendors, reports, masters, settings
+                           # purchases, vendors, reports, masters, settings, whatsapp
 ```
+
+## WhatsApp
+
+There are two sending modes, chosen under WhatsApp → WhatsApp settings:
+
+- **Click-to-chat** (default, free, no setup): WhatsApp Desktop or WhatsApp Web opens with the message typed in, and staff press Send. For broadcasts, the app steps through the contacts one at a time. Works with the shop's normal WhatsApp or WhatsApp Business app.
+- **Automatic (WhatsApp Business Cloud API):** messages are sent without clicking, using Meta-approved templates. You need a Meta Business account, a verified business number, approved templates (with `{{1}}`, `{{2}}`, … in the same order as the placeholders here), and the phone number ID plus a permanent token. Meta charges per message. In this prototype the token is stored in the browser, and only Admins can see it; before going live, move sending to a server.
+
+The app runs only while it is open, so birthday wishes are not sent on their own on a schedule. Open the WhatsApp screen (or the dashboard reminder) each day. Fully automatic daily sending needs a small server; see the next steps below.
 
 ## Prototype limits and next steps
 
 - **Storage:** data is kept in the browser (`localStorage`) on the computer where the app is used. Take regular backups (Settings → Download backup). To share data across counters or branches, replace `js/db.js` with calls to a backend API and database (for example Node or Django with PostgreSQL). All screens go through `DB`, so nothing else needs to change.
 - **Security:** sign-in is checked inside the browser with salted SHA-256 hashes, which is fine for a demo. A production version needs server-side authentication.
 - **Live rates:** set **Settings → Live rate feed URL** to an endpoint that returns JSON such as `{"G24K": 12850, "G22K": 11780, "S999": 165}`.
-- **Possible additions:** barcode printer integration, WhatsApp/SMS bills and greetings, e-invoicing/IRN, gold saving schemes, repair and custom orders, karigar job work and multi-branch support.
+- **Possible additions:** scheduled automatic WhatsApp sending from a server, barcode printer integration, sending bills on WhatsApp, SMS, e-invoicing/IRN, gold saving schemes, repair and custom orders, karigar job work and multi-branch support.

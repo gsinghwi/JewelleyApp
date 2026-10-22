@@ -198,20 +198,20 @@
   }));
 
   const vendors = [
-    { id: 'ven_1', code: 'V001', name: 'Shree Ganesh Ornaments Pvt Ltd', type: 'Manufacturer', contactPerson: 'Mahesh Soni', phone: '9820012345', email: 'sales@shreeganesh.example', gstin: '27AAECS1234F1Z5', city: 'Mumbai', state: 'Maharashtra', address: 'Zaveri Bazaar, Kalbadevi, Mumbai', openingBalance: 0 },
-    { id: 'ven_2', code: 'V002', name: 'Rajkot Silver Crafts', type: 'Wholesaler', contactPerson: 'Bharat Patel', phone: '9824023456', email: 'info@rajkotsilver.example', gstin: '24AAFFR5678K1Z2', city: 'Rajkot', state: 'Gujarat', address: 'Soni Bazaar, Rajkot', openingBalance: 0 },
-    { id: 'ven_3', code: 'V003', name: 'Kolkata Karigar Works', type: 'Karigar / Job Worker', contactPerson: 'Subhash Das', phone: '9830034567', email: '', gstin: '19ABCPD4321L1Z9', city: 'Kolkata', state: 'West Bengal', address: 'Bowbazar, Kolkata', openingBalance: 0 },
-    { id: 'ven_4', code: 'V004', name: 'Surat Diamond House', type: 'Manufacturer', contactPerson: 'Nilesh Shah', phone: '9825045678', email: 'orders@suratdiamond.example', gstin: '24AAGCS8765M1Z1', city: 'Surat', state: 'Gujarat', address: 'Varachha Road, Surat', openingBalance: 0 },
-    { id: 'ven_5', code: 'V005', name: 'Jaipur Gems & Kundan', type: 'Wholesaler', contactPerson: 'Rakesh Agarwal', phone: '9829056789', email: '', gstin: '08AAJFJ2345N1Z3', city: 'Jaipur', state: 'Rajasthan', address: 'Johari Bazaar, Jaipur', openingBalance: 0 },
+    { id: 'ven_1', code: 'V001', name: 'Shree Ganesh Ornaments Pvt Ltd', type: 'Manufacturer', contactPerson: 'Mahesh Soni', phone: '9820012345', email: 'sales@shreeganesh.example', gstin: '27AAECS1234F1Z5', city: 'Mumbai', state: 'Maharashtra', address: 'Zaveri Bazaar, Kalbadevi, Mumbai', openingBalance: 0, waOptIn: true },
+    { id: 'ven_2', code: 'V002', name: 'Rajkot Silver Crafts', type: 'Wholesaler', contactPerson: 'Bharat Patel', phone: '9824023456', email: 'info@rajkotsilver.example', gstin: '24AAFFR5678K1Z2', city: 'Rajkot', state: 'Gujarat', address: 'Soni Bazaar, Rajkot', openingBalance: 0, waOptIn: true },
+    { id: 'ven_3', code: 'V003', name: 'Kolkata Karigar Works', type: 'Karigar / Job Worker', contactPerson: 'Subhash Das', phone: '9830034567', email: '', gstin: '19ABCPD4321L1Z9', city: 'Kolkata', state: 'West Bengal', address: 'Bowbazar, Kolkata', openingBalance: 0, waOptIn: true },
+    { id: 'ven_4', code: 'V004', name: 'Surat Diamond House', type: 'Manufacturer', contactPerson: 'Nilesh Shah', phone: '9825045678', email: 'orders@suratdiamond.example', gstin: '24AAGCS8765M1Z1', city: 'Surat', state: 'Gujarat', address: 'Varachha Road, Surat', openingBalance: 0, waOptIn: true },
+    { id: 'ven_5', code: 'V005', name: 'Jaipur Gems & Kundan', type: 'Wholesaler', contactPerson: 'Rakesh Agarwal', phone: '9829056789', email: '', gstin: '08AAJFJ2345N1Z3', city: 'Jaipur', state: 'Rajasthan', address: 'Johari Bazaar, Jaipur', openingBalance: 0, waOptIn: true },
   ];
 
   const customers = [
     { id: 'cus_walkin', code: 'C0000', name: 'Walk-in Customer', phone: '', groupId: 'cg_1', city: '', notes: 'Default customer for counter sales' },
-    { id: 'cus_1', code: 'C0001', name: 'Priya Sharma', phone: '9876543210', email: 'priya@example.com', groupId: 'cg_2', city: 'Pune', state: 'Maharashtra', address: 'Kothrud, Pune', dob: '1988-11-04', anniversary: '2012-02-14', pan: '', gstin: '', notes: 'Prefers temple jewellery' },
-    { id: 'cus_2', code: 'C0002', name: 'Rahul Verma', phone: '9812345678', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Aundh, Pune', dob: '1985-10-28', anniversary: '2015-11-20', pan: '', gstin: '', notes: '' },
-    { id: 'cus_3', code: 'C0003', name: 'Anjali Iyer', phone: '9898989898', email: 'anjali@example.com', groupId: 'cg_4', city: 'Pune', state: 'Maharashtra', address: 'Baner, Pune', dob: '1992-03-15', anniversary: '', pan: '', gstin: '', notes: 'Gold saving scheme member' },
-    { id: 'cus_4', code: 'C0004', name: 'Mehta Jewels (B2B)', phone: '9822000111', email: 'accounts@mehtajewels.example', groupId: 'cg_3', city: 'Nashik', state: 'Maharashtra', address: 'MG Road, Nashik', dob: '', anniversary: '', pan: 'AAAFM1234P', gstin: '27AAAFM1234P1Z6', notes: 'Wholesale buyer' },
-    { id: 'cus_5', code: 'C0005', name: 'Sunita Reddy', phone: '9900112233', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Viman Nagar, Pune', dob: '1979-10-30', anniversary: '2003-05-09', pan: '', gstin: '', notes: '' },
+    { id: 'cus_1', code: 'C0001', name: 'Priya Sharma', phone: '9876543210', email: 'priya@example.com', groupId: 'cg_2', waOptIn: true, city: 'Pune', state: 'Maharashtra', address: 'Kothrud, Pune', dob: '1988-11-04', anniversary: '2012-02-14', pan: '', gstin: '', notes: 'Prefers temple jewellery' },
+    { id: 'cus_2', waOptIn: true, code: 'C0002', name: 'Rahul Verma', phone: '9812345678', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Aundh, Pune', dob: '1985-10-28', anniversary: '2015-11-20', pan: '', gstin: '', notes: '' },
+    { id: 'cus_3', waOptIn: true, code: 'C0003', name: 'Anjali Iyer', phone: '9898989898', email: 'anjali@example.com', groupId: 'cg_4', city: 'Pune', state: 'Maharashtra', address: 'Baner, Pune', dob: '1992-03-15', anniversary: '', pan: '', gstin: '', notes: 'Gold saving scheme member' },
+    { id: 'cus_4', waOptIn: true, code: 'C0004', name: 'Mehta Jewels (B2B)', phone: '9822000111', email: 'accounts@mehtajewels.example', groupId: 'cg_3', city: 'Nashik', state: 'Maharashtra', address: 'MG Road, Nashik', dob: '', anniversary: '', pan: 'AAAFM1234P', gstin: '27AAAFM1234P1Z6', notes: 'Wholesale buyer' },
+    { id: 'cus_5', waOptIn: true, code: 'C0005', name: 'Sunita Reddy', phone: '9900112233', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Viman Nagar, Pune', dob: '1979-10-30', anniversary: '2003-05-09', pan: '', gstin: '', notes: '' },
   ];
 
   const users = [
@@ -246,7 +246,27 @@
     terms: '1. Goods once sold will be exchanged as per shop policy only.\n2. Hallmarked jewellery as per BIS standards (HUID).\n3. Old gold will be accepted at prevailing rate less applicable deduction.\n4. Subject to local jurisdiction.',
     showDemoHint: true,
     rateApiUrl: '',
+    waMode: 'LINK',
+    waDaysBefore: 7,
+    waAnniversary: true,
+    waPhoneNumberId: '',
+    waToken: '',
+    waApiVersion: 'v21.0',
   };
+
+  // WhatsApp message templates. In API mode each needs a matching template approved in Meta.
+  const waTemplates = [
+    ['Birthday', 'Birthday wish (7 days before)', 'birthday_wish',
+      'Dear {name}, wishing you a very Happy Birthday in advance on {date}! As our valued customer, enjoy a special birthday offer on making charges this week at {shop}. Visit us at {address} or call {shopPhone}.'],
+    ['Anniversary', 'Anniversary wish', 'anniversary_wish',
+      'Dear {name}, warm wishes on your anniversary on {date}! Celebrate with an exclusive anniversary offer at {shop}. Call {shopPhone} to book a visit.'],
+    ['Promotion', 'Festive offer (Dhanteras / Diwali)', 'festive_offer',
+      'Dear {name}, this festive season {shop} brings you up to 25% off on making charges on gold and diamond jewellery, plus free hallmarking. Offer valid for a limited time. Visit {address} or call {shopPhone}.'],
+    ['Promotion', 'New collection launch', 'new_collection',
+      'Dear {name}, our new bridal and temple jewellery collection has arrived at {shop}! Be the first to see it. Visit {address} or call {shopPhone}.'],
+    ['Promotion', 'Supplier announcement (vendors)', 'vendor_update',
+      'Dear {name}, greetings from {shop}. We are planning fresh stock purchases this month. Please share your latest designs and rates. Contact: {shopPhone}.'],
+  ].map(([type, name, waTemplateName, body], i) => ({ id: 'wat_' + (i + 1), type, name, waTemplateName, waLanguage: 'en', body, active: true }));
 
   function buildRates(today) {
     // Seven days of sample history ending today (per gram, INR)
@@ -322,6 +342,7 @@
       users, categories, metals, purities, hsn, stoneTypes, paymentModes, customerGroups,
       items, vendors, customers, rates, stock,
       purchases: [], vendorPayments: [], invoices: [], receipts: [],
+      waTemplates: waTemplates.map((t) => Object.assign({}, t)), waLog: [],
       counters: { invoice: 0, purchase: 0, tag: 1000 + stock.length, customer: customers.length - 1, receipt: 0 },
       audit: [],
     };
@@ -363,5 +384,5 @@
     return data;
   }
 
-  global.Seed = { build };
+  global.Seed = { build, waTemplates, settings };
 })(window);

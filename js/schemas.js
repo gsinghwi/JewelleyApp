@@ -162,8 +162,9 @@
         { name: 'aadhaarLast4', label: 'Aadhaar (last 4 digits)', maxlength: 4 },
         { name: 'ringSize', label: 'Ring / bangle size' },
         { name: 'notes', label: 'Notes / preferences', type: 'textarea', full: true },
+        { name: 'waOptIn', label: 'Customer agreed to receive WhatsApp offers & greetings', type: 'checkbox', full: true },
       ],
-      defaults: () => ({ groupId: 'cg_1', state: DB.settings.state }),
+      defaults: () => ({ groupId: 'cg_1', state: DB.settings.state, waOptIn: true }),
       beforeSave: (d, isNew, rec) => {
         if (d.phone && !/^[0-9+\- ]{10,15}$/.test(d.phone)) return 'Enter a valid mobile number';
         if (d.phone) {
@@ -206,8 +207,9 @@
         { name: 'state', label: 'State', type: 'select', options: STATES },
         { name: 'bankDetails', label: 'Bank details (A/c, IFSC)', full: true },
         { name: 'openingBalance', label: 'Opening balance payable (₹)', type: 'number' },
+        { name: 'waOptIn', label: 'Vendor agreed to receive WhatsApp messages', type: 'checkbox', full: true },
       ],
-      defaults: () => ({ code: 'V' + String(DB.all('vendors').length + 1).padStart(3, '0'), type: 'Manufacturer', openingBalance: 0 }),
+      defaults: () => ({ code: 'V' + String(DB.all('vendors').length + 1).padStart(3, '0'), type: 'Manufacturer', openingBalance: 0, waOptIn: true }),
       beforeSave: (d, isNew, rec) => {
         d.gstin = (d.gstin || '').toUpperCase();
         return unique('vendors', 'code', 'Vendor code')(d, isNew, rec);
@@ -221,6 +223,25 @@
         { label: 'GSTIN', key: 'gstin' },
         { label: 'Stock pcs', align: 'right', render: (r) => Biz.inStock().filter((s) => s.vendorId === r.id).length },
         { label: 'Payable', align: 'right', render: (r) => { const p = DB.vendorSummary(r.id).payable; return p > 0 ? UI.badge(U.inr(p, { whole: true }), 'warn') : '-'; } },
+      ],
+    },
+
+    waTemplates: {
+      col: 'waTemplates', title: 'Message Templates', singular: 'Template', modalSize: 'wide', canEdit: isAdmin,
+      fields: [
+        { name: 'name', label: 'Template name (for staff)', required: true },
+        { name: 'type', label: 'Used for', type: 'select', required: true, options: ['Birthday', 'Anniversary', 'Promotion'] },
+        { name: 'body', label: 'Message text', type: 'textarea', rows: 5, required: true, full: true,
+          help: 'Placeholders: {name} {shop} {shopPhone} {address} {date}. For automatic sending, the approved Meta template must use {{1}}, {{2}} ... in the same order.' },
+        { name: 'waTemplateName', label: 'Approved Meta template name (automatic mode only)', placeholder: 'e.g. birthday_wish' },
+        { name: 'waLanguage', label: 'Template language code', placeholder: 'en', default: 'en' },
+        { name: 'active', label: 'Active', type: 'checkbox', default: true },
+      ],
+      columns: [
+        { label: 'Template', render: (r) => '<b>' + esc(r.name) + '</b><br><small class="muted">' + esc(String(r.body).slice(0, 90)) + (String(r.body).length > 90 ? '...' : '') + '</small>' },
+        { label: 'Used for', render: (r) => UI.badge(r.type, r.type === 'Promotion' ? 'gold' : 'ok') },
+        { label: 'Meta template', key: 'waTemplateName' },
+        { label: 'Status', render: (r) => (r.active === false ? UI.badge('Inactive') : UI.badge('Active', 'ok')) },
       ],
     },
 

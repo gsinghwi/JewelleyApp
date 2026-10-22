@@ -276,6 +276,20 @@ dl.info dd { margin: 0; }
 .bp-right span { height: 20px; border: 1px solid var(--line); border-radius: 5px; }
 .bp-right i { height: 22px; border-radius: 5px; background: var(--p); }
 
+/* ---------- WhatsApp ---------- */
+.wa-bubble { background: #dcf8c6; color: #1f2d1b; border-radius: 10px 10px 10px 2px; padding: 10px 14px; max-width: 520px; white-space: normal; box-shadow: 0 1px 1px rgba(0, 0, 0, .08); margin: 6px 0; }
+.wa-progress .bar { height: 8px; background: var(--soft); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.wa-progress .bar i { display: block; height: 100%; width: 0; background: #25d366; transition: width .2s; }
+.wa-results li.err { color: var(--err); }
+.wa-results li.ok { color: var(--ok); }
+.wa-help p, .wa-help ol { margin: 0 0 10px; }
+.wa-alert { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 8px; background: #e7f8ee; border: 1px solid #b6e6c8; color: #14532d; margin-bottom: 8px; }
+.wa-alert:hover { text-decoration: none; border-color: #25d366; }
+.wa-alert span { font-size: 12.5px; }
+.wa-due:not(:empty) { background: #25d366; color: #fff !important; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.tabs .tab-link.muted { margin-left: auto; }
+.modal .banner.warn, .wa-help .banner.warn { border-radius: 8px; margin-bottom: 10px; }
+
 /* ---------- invoice ---------- */
 .invoice-preview { background: #fff; }
 .invoice { position: relative; color: #222; font-size: 12.5px; }

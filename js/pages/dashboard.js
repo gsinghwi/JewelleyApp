@@ -37,6 +37,7 @@
       const lowStock = DB.all('items').filter((it) => it.active !== false && it.reorderLevel > 0 &&
         (counts[it.id] || []).length < it.reorderLevel && DB.all('stock').some((s) => s.itemId === it.id)).slice(0, 8);
       const events = Biz.upcomingEvents(15).slice(0, 8);
+      const wishes = Auth.can(['Admin']) ? WA.dueWishes() : [];
       const recent = invs.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 6);
       const latest = DB.latestRate();
       const purities = DB.all('purities').filter((p) => p.showRate);
@@ -75,6 +76,8 @@
           rows: recent, empty: 'No bills yet',
         }) + '</section>' +
         '<section class="card"><div class="card-head"><h3>Reminders</h3></div>' +
+        (wishes.length ? '<a class="wa-alert" href="#/whatsapp"><b>' + wishes.length + ' WhatsApp wish' + (wishes.length > 1 ? 'es' : '') + ' to send</b>' +
+          '<span>' + esc(wishes.slice(0, 3).map((w) => w.customer.name + ' (' + w.type.toLowerCase() + ' ' + U.fmtDate(w.date) + ')').join(', ')) + (wishes.length > 3 ? ' and more' : '') + '</span></a>' : '') +
         '<h4 class="sub">Birthdays &amp; anniversaries (next 15 days)</h4>' +
         (events.length ? '<ul class="list">' + events.map((e) => '<li><a href="#/customers?open=' + e.customer.id + '">' + esc(e.customer.name) + '</a> &mdash; ' + e.type + ' on ' + U.fmtDate(e.date) +
           ' <span class="muted">(' + (e.inDays === 0 ? 'today' : 'in ' + e.inDays + ' day' + (e.inDays > 1 ? 's' : '')) + ')</span>' + (e.customer.phone ? ' <span class="muted">' + esc(e.customer.phone) + '</span>' : '') + '</li>').join('') + '</ul>' : '<p class="muted">None coming up.</p>') +

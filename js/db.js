@@ -21,6 +21,7 @@
         this.data = Seed.build();
         this.persist();
       }
+      this.migrate();
       // Browsers that saved the old demo shop name pick up the new default; a name set in Settings is kept
       const s = this.data.settings;
       if (s.shopName === 'Swarna Mahal Jewellers') {
@@ -29,6 +30,19 @@
         this.persist();
       }
       return this.data;
+    },
+
+    // Bring data saved by an older version of the app up to date
+    migrate() {
+      const d = this.data;
+      Object.keys(Seed.settings).forEach((k) => { if (d.settings[k] === undefined) d.settings[k] = Seed.settings[k]; });
+      if (!d.waTemplates) {
+        d.waTemplates = Seed.waTemplates.map((t) => Object.assign({}, t));
+        // Demo records shipped with the app are fictional, so mark them as opted in for WhatsApp
+        d.customers.forEach((c) => { if (/^cus_\d+$/.test(c.id) && c.waOptIn === undefined) c.waOptIn = true; });
+        d.vendors.forEach((v) => { if (/^ven_\d+$/.test(v.id) && v.waOptIn === undefined) v.waOptIn = true; });
+      }
+      if (!d.waLog) d.waLog = [];
     },
 
     persist() {

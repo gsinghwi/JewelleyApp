@@ -79,8 +79,9 @@
       actions: [
         { label: 'Close' },
         { label: 'Receive payment', cls: 'btn', onClick: () => { receivePayment(c, refresh); } },
+      ].concat(Auth.can(['Admin']) && c.phone ? [{ label: 'WhatsApp', cls: 'btn', onClick: () => { WAUI.compose(c, 'customer'); } }] : []).concat([
         { label: 'New sale', cls: 'btn primary', onClick: () => { App.go('#/pos?customer=' + c.id); } },
-      ],
+      ]),
     });
     m.el.addEventListener('click', (e) => { if (e.target.closest('a[href^="#/"]')) m.close(); });
   }

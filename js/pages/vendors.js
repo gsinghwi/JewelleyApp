@@ -29,7 +29,9 @@
           ],
           rows: entries,
         }),
-      actions: [{ label: 'Close' }, { label: 'Pay vendor', cls: 'btn primary', onClick: () => PurchaseUI.vendorPayment(v.id, refresh) }],
+      actions: [{ label: 'Close' }]
+        .concat(Auth.can(['Admin']) && v.phone ? [{ label: 'WhatsApp', cls: 'btn', onClick: () => { WAUI.compose(v, 'vendor', { type: 'Promotion' }); } }] : [])
+        .concat([{ label: 'Pay vendor', cls: 'btn primary', onClick: () => PurchaseUI.vendorPayment(v.id, refresh) }]),
     });
     return m;
   }
