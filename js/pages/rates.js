@@ -25,7 +25,7 @@
   Pages.register({
     id: 'rates', title: "Today's Rates", icon: '&#8377;',
     render(el) {
-      const canEdit = Auth.can(['Admin', 'Manager']);
+      const canEdit = Auth.can(['Admin', 'Manager']) && Branch.isMaster(); // one rate for all branches, set by head office
       const purities = DB.all('purities').filter((p) => p.metalId !== 'NONE');
       const history = DB.rateHistory();
       const latest = DB.latestRate();

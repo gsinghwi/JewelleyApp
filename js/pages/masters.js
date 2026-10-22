@@ -85,7 +85,7 @@
   }
 
   Pages.register({
-    id: 'masters', title: 'Master Data', icon: '&#9776;', roles: ['Admin', 'Manager'],
+    id: 'masters', title: 'Master Data', icon: '&#9776;', roles: ['Admin', 'Manager'], masterOnly: true,
     render(el, params) {
       const tabs = TABS.filter((t) => Auth.can(t.roles));
       let active = tabs.find((t) => t.id === params.tab) ? params.tab : 'items';

@@ -115,13 +115,14 @@
           const sub = U.r2(U.sum(valid, 'amount'));
           const gst = U.r2(sub * U.n(d.gstPct) / 100);
           const purchase = DB.insert('purchases', Object.assign(d, {
-            purchaseNo: DB.nextNo('purchase', DB.settings.purchasePrefix || 'PUR', d.billDate),
+            purchaseNo: DB.nextNo('purchase', DB.settings.purchasePrefix || 'PUR', d.billDate, Branch.masterId()), branchId: Branch.masterId(),
             subTotal: sub, gst, total: U.r2(sub + gst), paid: U.n(d.paid), by: Auth.user.username, lines: [],
           }));
           valid.forEach((l) => {
             const it = Biz.item(l.itemId);
             const goldLike = it.metalId === 'GOLD' || it.metalId === 'PLATINUM';
             const piece = DB.insert('stock', {
+              branchId: Branch.masterId(), // purchases arrive at the master branch, then get transferred
               tagNo: DB.nextTag(), itemId: l.itemId, purityId: l.purityId, qty: 1,
               grossWt: U.n(l.grossWt), stoneWt: U.n(l.stoneWt), netWt: U.n(l.netWt), stoneValue: U.n(l.stoneValue),
               stoneDetails: '', huid: String(l.huid || '').toUpperCase(), fixedPrice: U.n(l.fixedPrice),
@@ -168,7 +169,7 @@
   }
 
   Pages.register({
-    id: 'purchases', title: 'Purchases', icon: '&#8681;', roles: ['Admin', 'Manager'],
+    id: 'purchases', title: 'Purchases', icon: '&#8681;', roles: ['Admin', 'Manager'], masterOnly: true,
     render(el, params) {
       const state = { from: U.addDays(U.today(), -90), to: U.today(), vendor: '' };
       el.innerHTML = '<section class="card"><div class="toolbar wrap">' +

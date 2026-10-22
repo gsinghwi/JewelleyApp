@@ -25,16 +25,17 @@
     const mixed = inv.lines.some((l) => U.n(l.gstPct) !== U.n(inv.lines[0].gstPct));
     const row = (label, val, cls) => '<tr class="' + (cls || '') + '"><td>' + label + '</td><td class="right">' + val + '</td></tr>';
 
+    const br = Branch.details(inv.branchId);
     return '<div class="invoice">' +
       (inv.status === 'CANCELLED' ? '<div class="stamp">CANCELLED</div>' : '') +
       '<header class="inv-head">' +
       (s.logo ? '<img src="' + esc(s.logo) + '" alt="" class="inv-logo">' : '') +
-      '<div class="inv-shop"><h2>' + esc(s.shopName) + '</h2><p>' + esc(s.address) + '<br>' + esc([s.phone, s.email].filter(Boolean).join(' | ')) + '</p>' +
-      '<p><b>GSTIN:</b> ' + esc(s.gstin) + (s.bisLicence ? ' &nbsp; <b>BIS Licence:</b> ' + esc(s.bisLicence) : '') + '</p></div>' +
+      '<div class="inv-shop"><h2>' + esc(s.shopName) + '</h2><p>' + (br.name ? '<b>' + esc(br.name) + '</b><br>' : '') + esc(br.address) + '<br>' + esc([br.phone, s.email].filter(Boolean).join(' | ')) + '</p>' +
+      '<p><b>GSTIN:</b> ' + esc(br.gstin) + (s.bisLicence ? ' &nbsp; <b>BIS Licence:</b> ' + esc(s.bisLicence) : '') + '</p></div>' +
       '<div class="inv-title"><h3>TAX INVOICE</h3><p><b>' + esc(inv.invoiceNo) + '</b><br>Date: ' + U.fmtDate(inv.date) + '</p></div></header>' +
       '<section class="inv-parties"><div><h4>Bill to</h4><p><b>' + esc(c.name) + '</b><br>' + esc([c.address, c.city, c.state].filter(Boolean).join(', ')) +
       (c.phone ? '<br>Mobile: ' + esc(c.phone) : '') + (c.gstin ? '<br>GSTIN: ' + esc(c.gstin) : '') + (c.pan ? '<br>PAN: ' + esc(c.pan) : '') + '</p></div>' +
-      '<div><h4>Place of supply</h4><p>' + esc(inv.interState ? (c.state || 'Other state') : (s.state + ' (' + s.stateCode + ')')) + '</p></div></section>' +
+      '<div><h4>Place of supply</h4><p>' + esc(inv.interState ? (c.state || 'Other state') : (br.state + ' (' + br.stateCode + ')')) + '</p></div></section>' +
       '<table class="inv-table"><thead><tr><th>#</th><th>Item</th><th>HSN</th><th>Purity</th><th class="right">Gross g</th><th class="right">Net g</th><th class="right">Rate/g</th><th class="right">Metal ₹</th><th class="right">Making ₹</th><th class="right">Stone/Other ₹</th><th class="right">Amount ₹</th></tr></thead><tbody>' + lineRows + '</tbody></table>' +
       '<div class="inv-bottom"><div class="inv-words">' + og +
       '<p><b>Amount in words:</b> ' + esc(U.amountInWords(inv.grandTotal)) + '</p>' +
@@ -119,7 +120,7 @@
           columns: [
             { label: 'Invoice', render: (i) => '<b>' + esc(i.invoiceNo) + '</b>' },
             { label: 'Date', render: (i) => U.fmtDate(i.date) },
-            { label: 'Customer', render: (i) => esc(DB.name('customers', i.customerId)) },
+            { label: 'Customer', render: (i) => esc(DB.name('customers', i.customerId)) + (Branch.viewId() === 'ALL' ? '<br><small class="muted">' + esc(Branch.name(i.branchId)) + '</small>' : '') },
             { label: 'Items', render: (i) => esc(i.lines.map((l) => l.itemName).join(', ')) },
             { label: 'Net wt', align: 'right', render: (i) => U.num(U.sum(i.lines, 'netWt')) },
             { label: 'Total', align: 'right', render: (i) => U.inr(i.grandTotal, { whole: true }) },

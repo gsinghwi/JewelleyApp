@@ -5,7 +5,9 @@
 
   function saveReceipt(customer, d) {
     d.customerId = customer.id;
-    d.receiptNo = DB.nextNo('receipt', 'RCT', d.date);
+    // Booked at the customer's own branch so each branch's dues and receipts stay together
+    d.branchId = customer.branchId || Branch.workId();
+    d.receiptNo = DB.nextNo('receipt', 'RCT', d.date, d.branchId);
     d.by = Auth.user.username;
     // Settle the oldest bills with a balance first so each invoice shows its current due
     let left = d.amount;
@@ -116,6 +118,7 @@
     render(el, params) {
       el.innerHTML = '<section class="card"><div class="crud"></div></section>';
       const crud = UI.crud(el.querySelector('.crud'), Object.assign({}, Schemas.customers, {
+        columns: Schemas.customers.columns.concat(Branch.viewId() === 'ALL' ? [{ label: 'Branch', render: (r) => esc(r.branchId ? Branch.name(r.branchId) : 'All branches') }] : []),
         onRowClick: (c) => profile(c, () => crud.render()),
         rowActions: (r) => '<button class="btn sm" data-sale="' + r.id + '">Bill</button>',
       }));

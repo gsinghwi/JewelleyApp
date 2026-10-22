@@ -326,6 +326,20 @@ a.kpi-link:hover { border-color: var(--accent); }
 .page-break { break-after: page; page-break-after: always; height: 0; }
 #print-root .pawn-ticket { margin-bottom: 0; }
 
+/* ---------- branches ---------- */
+.branch-slot { flex: none; }
+.branch-select { width: auto; max-width: 260px; padding: 6px 10px; border-radius: 999px; font-weight: 600; color: var(--primary); border-color: rgba(var(--primary-rgb), .35); background: #fff; }
+.branch-pill { display: inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), .08); color: var(--primary); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.billing-branch { margin-top: 8px; font-size: 13px; }
+.branch-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.branch-card.inactive { opacity: .6; }
+.branch-card .card-head { margin-bottom: 4px; }
+.mini-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.mini-kpis > div { background: var(--soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
+.mini-kpis span { font-size: 11.5px; color: var(--muted); }
+.mini-kpis b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.mini-kpis small { color: var(--muted); font-size: 11px; }
+
 /* ---------- invoice ---------- */
 .invoice-preview { background: #fff; }
 .invoice { position: relative; color: #222; font-size: 12.5px; }
@@ -426,6 +440,8 @@ a.kpi-link:hover { border-color: var(--accent); }
   .shell.nav-open .scrim { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, .35); z-index: 50; }
   .menu-btn { display: inline-block; }
   .ticker-slot { display: none; }
+  .branch-select { max-width: 150px; }
+  .branch-pill { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
   .topbar { padding: 10px 16px; }
   .page-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .view { padding: 16px; }

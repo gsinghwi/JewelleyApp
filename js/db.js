@@ -44,6 +44,19 @@
       }
       if (!d.waLog) d.waLog = [];
       if (!d.pawns) d.pawns = [];
+      if (!d.branches) {
+        // Single-shop data from before branches: everything becomes Head Office, then demo
+        // branches, branch users and a few stock transfers are added so branches can be tried
+        d.branches = Seed.branches.map((b) => Object.assign({}, b));
+        const ho = d.branches.find((b) => b.type === 'MASTER').id;
+        Branch.OWNED.forEach((col) => (d[col] || []).forEach((r) => {
+          if (col !== 'transfers' && r.branchId === undefined && r.id !== 'cus_walkin') r.branchId = ho;
+        }));
+        d.users.forEach((u) => { if (!u.branchId) u.branchId = ho; });
+        Seed.branchUsers().forEach((u) => { if (!d.users.some((x) => x.username === u.username)) d.users.push(u); });
+        d.transfers = d.transfers || [];
+        Seed.distributeStock(d, U.today(), /^stk_\d+$/);
+      }
     },
 
     persist() {
@@ -79,8 +92,15 @@
       this.persist();
     },
 
-    all(col) {
+    // Every record of a collection, ignoring branches. Only for uniqueness checks and internals.
+    raw(col) {
       return this.data[col] || (this.data[col] = []);
+    },
+
+    // Records the signed-in user may see: branch-owned collections are limited to the current branch view
+    all(col) {
+      const arr = this.raw(col);
+      return global.Branch && Branch.OWNED.indexOf(col) >= 0 && global.Auth && Auth.user ? arr.filter((r) => Branch.visible(col, r)) : arr;
     },
 
     get(col, id) {
@@ -93,14 +113,15 @@
 
     insert(col, obj) {
       const rec = Object.assign({ id: U.uid(col.slice(0, 3)) }, obj, { createdAt: obj.createdAt || new Date().toISOString() });
-      this.all(col).push(rec);
+      if (global.Branch && Branch.OWNED.indexOf(col) >= 0 && col !== 'transfers' && rec.branchId === undefined) rec.branchId = Branch.workId();
+      this.raw(col).push(rec);
       this.log('create', col, rec.id);
       this.persist();
       return rec;
     },
 
     update(col, id, patch) {
-      const rec = this.get(col, id);
+      const rec = this.raw(col).find((x) => x.id === id);
       if (!rec) return null;
       Object.assign(rec, patch, { updatedAt: new Date().toISOString() });
       this.log('update', col, id);
@@ -109,7 +130,7 @@
     },
 
     remove(col, id) {
-      const arr = this.all(col);
+      const arr = this.raw(col);
       const i = arr.findIndex((x) => x.id === id);
       if (i >= 0) arr.splice(i, 1);
       this.log('delete', col, id);
@@ -118,14 +139,18 @@
 
     log(action, col, id) {
       const user = global.Auth && Auth.user ? Auth.user.username : 'system';
-      const audit = this.all('audit');
+      const audit = this.raw('audit');
       audit.push({ at: new Date().toISOString(), user, action, col, id });
       if (audit.length > 500) audit.splice(0, audit.length - 500);
     },
 
-    // Running document numbers, e.g. INV/2026-27/0007
-    nextNo(counter, prefix, date) {
+    // Running document numbers, e.g. INV/2026-27/0007, or INV/KTD/2026-27/0007 with a separate series per branch
+    nextNo(counter, prefix, date, branchId) {
       const c = this.data.counters;
+      if (branchId && global.Branch) {
+        prefix = Branch.docPrefix(prefix, branchId);
+        counter = counter + ':' + branchId;
+      }
       c[counter] = (c[counter] || 0) + 1;
       return prefix + '/' + U.finYear(date) + '/' + String(c[counter]).padStart(4, '0');
     },
@@ -136,7 +161,7 @@
       do {
         c.tag = (c.tag || 1000) + 1;
         tag = (this.settings.tagPrefix || 'T') + c.tag;
-      } while (this.find('stock', (s) => s.tagNo === tag));
+      } while (this.raw('stock').some((s) => s.tagNo === tag)); // tags are unique across all branches
       return tag;
     },
 

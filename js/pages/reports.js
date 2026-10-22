@@ -13,6 +13,43 @@
 
   const REPORTS = [
     {
+      id: 'branchSummary', group: 'Branches', title: 'Branch-wise summary (all branches)', params: ['range'], masterOnly: true,
+      run(p) {
+        const rates = DB.currentRates();
+        const rows = Branch.all().map((b) => {
+          const mine = (col) => DB.raw(col).filter((x) => x.branchId === b.id);
+          const invs = mine('invoices').filter((i) => i.status !== 'CANCELLED' && U.inRange(i.date, p.from, p.to));
+          const stock = mine('stock').filter((s) => s.status === 'IN_STOCK');
+          const pawns = mine('pawns');
+          const active = pawns.filter((x) => x.status === 'ACTIVE');
+          const pawnPays = [];
+          pawns.forEach((x) => (x.payments || []).filter((y) => U.inRange(y.date, p.from, p.to)).forEach((y) => pawnPays.push(y)));
+          const receipts = mine('receipts').filter((r) => U.inRange(r.date, p.from, p.to));
+          return {
+            branch: b.name + (b.type === 'MASTER' ? ' (master)' : ''), bills: invs.length, sales: U.sum(invs, 'grandTotal'), gst: U.sum(invs, 'totalTax'),
+            oldGold: U.sum(invs, 'oldGoldValue'), collected: U.sum(invs, 'paid') + U.sum(receipts, 'amount'),
+            due: U.sum(invs, 'balance'), stockPcs: stock.length, stockNet: U.sum(stock, 'netWt'), stockValue: U.sum(stock, (s) => Biz.pieceValue(s, rates)),
+            pawnOut: U.sum(active.map((x) => Pawn.calc(x)), 'principal'), pawnInterest: U.sum(pawnPays, 'interestPart'),
+          };
+        });
+        return {
+          note: 'Stock and pawn loans outstanding are as of today; sales and collections are for the selected period. Stock valued at today\'s rate before GST.',
+          columns: [R('Branch', 'branch'), N('Bills', 'bills'), M('Sales', 'sales'), M('GST', 'gst'), M('Old gold', 'oldGold'), M('Collected', 'collected'), M('Due', 'due'),
+            N('Stock pcs', 'stockPcs'), Wt('Stock net g', 'stockNet'), M('Stock value', 'stockValue'), M('Pawn loans out', 'pawnOut'), M('Pawn interest', 'pawnInterest')],
+          rows, totals: totalsFor(rows, ['bills', 'sales', 'gst', 'oldGold', 'collected', 'due', 'stockPcs', 'stockNet', 'stockValue', 'pawnOut', 'pawnInterest']),
+        };
+      },
+    },
+    {
+      id: 'transfers', group: 'Branches', title: 'Stock transfers', params: ['range'],
+      run(p) {
+        const rows = DB.all('transfers').filter((t) => U.inRange(t.date, p.from, p.to)).sort((a, b) => (a.date < b.date ? -1 : 1)).map((t) => ({
+          no: t.transferNo, date: U.fmtDate(t.date), from: Branch.name(t.fromBranchId), to: Branch.name(t.toBranchId), pcs: t.count, grossWt: t.grossWt, netWt: t.netWt, note: t.note || '', by: t.by,
+        }));
+        return { columns: [R('Transfer no', 'no'), R('Date', 'date'), R('From', 'from'), R('To', 'to'), N('Pcs', 'pcs'), Wt('Gross g', 'grossWt'), Wt('Net g', 'netWt'), R('Note', 'note'), R('By', 'by')], rows, totals: totalsFor(rows, ['pcs', 'grossWt', 'netWt']) };
+      },
+    },
+    {
       id: 'salesRegister', group: 'Sales', title: 'Sales register', params: ['range'],
       run(p) {
         const rows = invoicesIn(p).sort((a, b) => (a.invoiceNo < b.invoiceNo ? -1 : 1)).map((i) => {
@@ -158,7 +195,7 @@
       },
     },
     {
-      id: 'purchaseRegister', group: 'Purchases', title: 'Purchase register', params: ['range'],
+      id: 'purchaseRegister', group: 'Purchases', title: 'Purchase register', params: ['range'], masterOnly: true,
       run(p) {
         const rows = DB.all('purchases').filter((x) => U.inRange(x.billDate, p.from, p.to)).map((x) => ({
           no: x.purchaseNo, date: U.fmtDate(x.billDate), vendor: DB.name('vendors', x.vendorId), gstin: DB.name('vendors', x.vendorId, 'gstin'), bill: x.billNo,
@@ -168,7 +205,7 @@
       },
     },
     {
-      id: 'vendorPayables', group: 'Purchases', title: 'Vendor payables', params: [],
+      id: 'vendorPayables', group: 'Purchases', title: 'Vendor payables', params: [], masterOnly: true,
       run() {
         const rows = DB.all('vendors').map((v) => {
           const s = DB.vendorSummary(v.id);
@@ -252,10 +289,11 @@
   Pages.register({
     id: 'reports', title: 'Reports', icon: '&#9636;', roles: ['Admin', 'Manager'],
     render(el, params) {
-      let current = REPORTS.find((r) => r.id === params.r) || REPORTS[0];
+      const reports = REPORTS.filter((r) => !r.masterOnly || Branch.isMaster());
+      let current = reports.find((r) => r.id === params.r) || reports.find((r) => r.id === 'salesRegister');
       const today = U.today();
       const p = { from: today.slice(0, 8) + '01', to: today, groupBy: 'category', category: '', days: 30 };
-      const groups = U.groupBy(REPORTS, (r) => r.group);
+      const groups = U.groupBy(reports, (r) => r.group);
       el.innerHTML = '<div class="reports">' +
         '<nav class="report-list card">' + Object.entries(groups).map(([g, rs]) => '<div class="nav-title">' + esc(g) + '</div>' +
           rs.map((r) => '<button data-r="' + r.id + '">' + esc(r.title) + '</button>').join('')).join('') + '</nav>' +
@@ -308,14 +346,14 @@
 
       el.addEventListener('click', (e) => {
         const r = e.target.closest('[data-r]');
-        if (r) select(REPORTS.find((x) => x.id === r.dataset.r));
+        if (r) select(reports.find((x) => x.id === r.dataset.r));
         if (e.target.closest('[data-csv]') && current.last) {
           U.download(current.id + '_' + U.today() + '.csv', U.toCSV(current.last.columns, current.last.rows), 'text/csv');
         }
         if (e.target.closest('[data-print]') && current.last) {
           const s = DB.settings;
           UI.print('<div class="report-print"><h2>' + esc(s.shopName) + '</h2><h3>' + esc(current.title) + '</h3><p>' +
-            (current.params.includes('range') ? 'Period: ' + U.fmtDate(p.from) + ' to ' + U.fmtDate(p.to) + ' &middot; ' : '') + 'Generated ' + U.fmtDateTime(new Date().toISOString()) + ' by ' + esc(Auth.user.name) + '</p>' +
+            (current.params.includes('range') ? 'Period: ' + U.fmtDate(p.from) + ' to ' + U.fmtDate(p.to) + ' &middot; ' : '') + 'Branch: ' + esc(current.id === 'branchSummary' ? 'All branches' : Branch.viewLabel()) + ' &middot; Generated ' + U.fmtDateTime(new Date().toISOString()) + ' by ' + esc(Auth.user.name) + '</p>' +
             el.querySelector('.report-out').innerHTML + '</div>');
         }
       });

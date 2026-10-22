@@ -185,7 +185,7 @@
         !(await UI.confirm('Loans of ₹20,000 or more should not be paid in cash (Income Tax s.269SS). Pay by bank transfer / UPI instead. Continue with cash anyway?', 'Continue with cash'))) return;
       const t = Pawn.totals(items);
       const rec = DB.insert('pawns', {
-        pawnNo: DB.nextNo('pawn', s.pawnPrefix || 'PWN', st.date),
+        pawnNo: DB.nextNo('pawn', s.pawnPrefix || 'PWN', st.date, Branch.workId()), branchId: Branch.workId(),
         customerId: c.id, customerName: c.name, date: st.date, dueDate: r.due,
         idProof: st.idProof, idLast4: idNum.slice(-4).toUpperCase(), packetNo: st.packetNo.trim(),
         items: t.items.map((it) => ({ description: it.description.trim(), purityId: it.purityId, grossWt: U.r3(it.grossWt), lessWt: U.r3(it.lessWt), netWt: it.netWt, rate: U.n(it.rate), value: it.value })),
@@ -366,7 +366,7 @@
     const now = Pawn.calc(p);
     return '<div class="invoice pawn-ticket">' +
       '<header class="inv-head">' + (s.logo ? '<img src="' + esc(s.logo) + '" alt="" class="inv-logo">' : '') +
-      '<div class="inv-shop"><h2>' + esc(s.shopName) + '</h2><p>' + esc(s.address) + '<br>' + esc([s.phone, s.email].filter(Boolean).join(' | ')) + '</p>' +
+      '<div class="inv-shop"><h2>' + esc(s.shopName) + '</h2><p>' + (Branch.name(p.branchId) ? '<b>' + esc(Branch.name(p.branchId)) + '</b><br>' : '') + esc(Branch.details(p.branchId).address) + '<br>' + esc([Branch.details(p.branchId).phone, s.email].filter(Boolean).join(' | ')) + '</p>' +
       (s.pawnLicence ? '<p><b>Pawnbroker licence:</b> ' + esc(s.pawnLicence) + '</p>' : '') + '</div>' +
       '<div class="inv-title"><h3>PAWN TICKET</h3><p><b>' + esc(p.pawnNo) + '</b><br>Date: ' + U.fmtDate(p.date) + '<br><small>' + esc(copy) + '</small></p></div></header>' +
       '<section class="inv-parties"><div><h4>Pledger</h4><p><b>' + esc(c.name) + '</b>' + (c.code ? ' (' + esc(c.code) + ')' : '') + '<br>' + esc([c.address, c.city].filter(Boolean).join(', ')) +
@@ -462,7 +462,7 @@
           columns: [
             { label: 'Pawn no', render: ({ p }) => '<b>' + esc(p.pawnNo) + '</b>' + (p.packetNo ? '<br><small class="muted">Packet ' + esc(p.packetNo) + '</small>' : '') },
             { label: 'Date', render: ({ p }) => U.fmtDate(p.date) },
-            { label: 'Customer', render: ({ p }) => esc(DB.name('customers', p.customerId) || p.customerName) },
+            { label: 'Customer', render: ({ p }) => esc(DB.name('customers', p.customerId) || p.customerName) + (Branch.viewId() === 'ALL' ? '<br><small class="muted">' + esc(Branch.name(p.branchId)) + '</small>' : '') },
             { label: 'Items', render: ({ p }) => esc(p.items.map((i) => i.description).join(', ')) + '<br><small class="muted">Net ' + U.num(p.netWt) + ' g</small>' },
             { label: 'Loan', align: 'right', render: ({ p }) => U.inr(p.principal, { whole: true }) },
             { label: 'Outstanding', align: 'right', render: ({ c }) => U.inr(c.principal, { whole: true }) },

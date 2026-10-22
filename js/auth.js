@@ -68,7 +68,10 @@
         '<div class="field"><label for="lg_pass">Password</label><input id="lg_pass" name="password" type="password" autocomplete="current-password" required></div>' +
         '<div class="login-error" hidden></div>' +
         '<button class="btn primary block" type="submit">Sign in</button>' +
-        (s.showDemoHint ? '<div class="demo-hint"><b>Demo logins</b><br>admin / admin123 &middot; manager / manager123 &middot; sales / sales123</div>' : '') +
+        (s.showDemoHint ? '<div class="demo-hint"><b>Demo logins</b>' +
+          '<br><b>Head office (master, sees all branches):</b> admin / admin123 &middot; manager / manager123 &middot; sales / sales123' +
+          '<br><b>Kothrud branch:</b> kothrud.mgr / kothrud123 &middot; kothrud.sales / kothrud123' +
+          '<br><b>Nashik branch:</b> nashik.mgr / nashik123 &middot; nashik.sales / nashik123</div>' : '') +
         '<p class="powered">JewelleryApp</p>' +
         '</form></section></div>';
 

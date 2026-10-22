@@ -55,7 +55,7 @@
   }
 
   Pages.register({
-    id: 'settings', title: 'Settings & Branding', icon: '&#9881;', roles: ['Admin'],
+    id: 'settings', title: 'Settings & Branding', icon: '&#9881;', roles: ['Admin'], masterOnly: true,
     render(el) {
       const s = DB.settings;
       el.innerHTML =

@@ -211,7 +211,9 @@
     { id: 'cus_2', waOptIn: true, code: 'C0002', name: 'Rahul Verma', phone: '9812345678', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Aundh, Pune', dob: '1985-10-28', anniversary: '2015-11-20', pan: '', gstin: '', notes: '' },
     { id: 'cus_3', waOptIn: true, code: 'C0003', name: 'Anjali Iyer', phone: '9898989898', email: 'anjali@example.com', groupId: 'cg_4', city: 'Pune', state: 'Maharashtra', address: 'Baner, Pune', dob: '1992-03-15', anniversary: '', pan: '', gstin: '', notes: 'Gold saving scheme member' },
     { id: 'cus_4', waOptIn: true, code: 'C0004', name: 'Mehta Jewels (B2B)', phone: '9822000111', email: 'accounts@mehtajewels.example', groupId: 'cg_3', city: 'Nashik', state: 'Maharashtra', address: 'MG Road, Nashik', dob: '', anniversary: '', pan: 'AAAFM1234P', gstin: '27AAAFM1234P1Z6', notes: 'Wholesale buyer' },
-    { id: 'cus_5', waOptIn: true, code: 'C0005', name: 'Sunita Reddy', phone: '9900112233', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Viman Nagar, Pune', dob: '1979-10-30', anniversary: '2003-05-09', pan: '', gstin: '', notes: '' },
+    { id: 'cus_6', waOptIn: true, code: 'C0006', branchId: 'br_ktd', name: 'Vikram Kulkarni', phone: '9765432109', email: '', groupId: 'cg_1', city: 'Pune', state: 'Maharashtra', address: 'Kothrud, Pune', dob: '1990-11-12', anniversary: '', pan: '', gstin: '', notes: 'Kothrud branch customer' },
+    { id: 'cus_7', waOptIn: true, code: 'C0007', branchId: 'br_nsk', name: 'Meera Joshi', phone: '9822334455', email: '', groupId: 'cg_2', city: 'Nashik', state: 'Maharashtra', address: 'Gangapur Road, Nashik', dob: '1984-02-20', anniversary: '2008-11-25', pan: '', gstin: '', notes: 'Nashik branch customer' },
+    { id: 'cus_5', waOptIn: true, code: 'C0005', name: 'Sunita Reddy', phone: '9900112233', email: '', groupId: 'cg_1', city: 'Nashik', state: 'Maharashtra', address: 'Indira Nagar, Nashik', dob: '1979-10-30', anniversary: '2003-05-09', pan: '', gstin: '', notes: '' },
   ];
 
   const users = [
@@ -220,8 +222,58 @@
     ['sales', 'Sales Executive', 'Sales', 'sales123'],
   ].map(([username, name, role, pw]) => {
     const salt = U.salt();
-    return { id: 'usr_' + username, username, name, role, salt, passwordHash: U.hashPassword(pw, salt), active: true };
+    return { id: 'usr_' + username, username, name, role, salt, passwordHash: U.hashPassword(pw, salt), active: true, branchId: 'br_ho' };
   });
+
+  // Head office (master) and two sub-branches
+  const branches = [
+    { id: 'br_ho', code: 'HO', name: 'Head Office - Laxmi Road', type: 'MASTER', address: 'Shop No. 12, Laxmi Road, Pune 411030', phone: '020-24450000', gstin: '', state: 'Maharashtra', manager: 'Shop Owner', active: true },
+    { id: 'br_ktd', code: 'KTD', name: 'Kothrud Branch', type: 'BRANCH', address: 'Karve Road, Kothrud, Pune 411038', phone: '020-25430000', gstin: '', state: 'Maharashtra', manager: 'Kothrud Manager', active: true },
+    { id: 'br_nsk', code: 'NSK', name: 'Nashik Branch', type: 'BRANCH', address: 'College Road, Nashik 422005', phone: '0253-2570000', gstin: '', state: 'Maharashtra', manager: 'Nashik Manager', active: true },
+  ];
+
+  function branchUsers() {
+    return [
+      ['kothrud.mgr', 'Kothrud Manager', 'Manager', 'kothrud123', 'br_ktd'],
+      ['kothrud.sales', 'Kothrud Sales', 'Sales', 'kothrud123', 'br_ktd'],
+      ['nashik.mgr', 'Nashik Manager', 'Manager', 'nashik123', 'br_nsk'],
+      ['nashik.sales', 'Nashik Sales', 'Sales', 'nashik123', 'br_nsk'],
+    ].map(([username, name, role, pw, branchId]) => {
+      const salt = U.salt();
+      return { id: 'usr_' + username.replace('.', '_'), username, name, role, salt, passwordHash: U.hashPassword(pw, salt), active: true, branchId };
+    });
+  }
+
+  /* Spread in-stock pieces from head office across the branches (round robin) and record one
+   * opening stock transfer per branch. idPattern limits it to demo records when migrating. */
+  function distributeStock(d, today, idPattern) {
+    const ho = d.branches.find((b) => b.type === 'MASTER');
+    const subs = d.branches.filter((b) => b.type !== 'MASTER' && b.active !== false);
+    if (!ho || !subs.length) return;
+    d.transfers = d.transfers || [];
+    let k = 0;
+    d.stock.forEach((s) => {
+      if (idPattern && !idPattern.test(s.id)) return;
+      if (s.status !== 'IN_STOCK' || (s.branchId && s.branchId !== ho.id)) return;
+      const slot = k++ % (subs.length + 1);
+      s.branchId = slot === 0 ? ho.id : subs[slot - 1].id;
+    });
+    const date = U.addDays(today, -15);
+    subs.forEach((b) => {
+      const moved = d.transfers.reduce((ids, t) => ids.concat(t.pieces.map((x) => x.stockId)), []);
+      const pcs = d.stock.filter((s) => s.branchId === b.id && moved.indexOf(s.id) < 0);
+      if (!pcs.length) return;
+      const key = 'transfer:' + ho.id;
+      d.counters[key] = (d.counters[key] || 0) + 1;
+      const sum = (f) => Math.round(pcs.reduce((t, x) => t + (+x[f] || 0), 0) * 1000) / 1000;
+      d.transfers.push({
+        id: 'trf_' + d.counters[key], transferNo: 'TRF/' + ho.code + '/' + U.finYear(date) + '/' + String(d.counters[key]).padStart(4, '0'),
+        date, fromBranchId: ho.id, toBranchId: b.id,
+        pieces: pcs.map((x) => ({ stockId: x.id, tagNo: x.tagNo, itemId: x.itemId, purityId: x.purityId, grossWt: x.grossWt, netWt: x.netWt })),
+        count: pcs.length, grossWt: sum('grossWt'), netWt: sum('netWt'), status: 'COMPLETED', note: 'Opening stock allocation', by: 'admin', createdAt: date + 'T10:00:00',
+      });
+    });
+  }
 
   const settings = {
     shopName: 'Nisarg Jewellers',
@@ -349,22 +401,31 @@
     const data = {
       version: 1,
       settings: Object.assign({}, settings),
-      users, categories, metals, purities, hsn, stoneTypes, paymentModes, customerGroups,
+      users: users.concat(branchUsers()), categories, metals, purities, hsn, stoneTypes, paymentModes, customerGroups,
       items, vendors, customers, rates, stock,
       purchases: [], vendorPayments: [], invoices: [], receipts: [],
       waTemplates: waTemplates.map((t) => Object.assign({}, t)), waLog: [],
+      branches: branches.map((b) => Object.assign({}, b)), transfers: [],
       counters: { invoice: 0, purchase: 0, tag: 1000 + stock.length, customer: customers.length - 1, receipt: 0, pawn: 0 },
       pawns: [],
       audit: [],
     };
 
-    // A few demo invoices so dashboard and reports have content
+    // Customers and stock belong to branches; everything starts at head office
+    const custBranch = { cus_1: 'br_ho', cus_2: 'br_ktd', cus_3: 'br_ho', cus_4: 'br_nsk', cus_5: 'br_nsk' };
+    data.customers.forEach((c) => { if (custBranch[c.id]) c.branchId = custBranch[c.id]; });
+    stock.forEach((p) => { p.branchId = 'br_ho'; });
+    const seller = { br_ho: 'sales', br_ktd: 'kothrud.sales', br_nsk: 'nashik.sales' };
+
+    // A few demo invoices per branch so dashboard and reports have content
     const demo = [
-      { day: -5, customerId: 'cus_1', tags: ['T1001', 'T1015'], pay: 'UPI', old: null },
-      { day: -3, customerId: 'cus_2', tags: ['T1004'], pay: 'Cash', old: { grossWt: 6.2, purityId: 'G22K', deductionPct: 8 } },
-      { day: -2, customerId: 'cus_3', tags: ['T1036', 'T1039'], pay: 'Credit Card', old: null },
-      { day: -1, customerId: 'cus_5', tags: ['T1024'], pay: 'NEFT / RTGS / IMPS', partial: 0.8 },
-      { day: 0, customerId: 'cus_walkin', tags: ['T1031'], pay: 'Cash' },
+      { day: -5, branchId: 'br_ho', customerId: 'cus_1', tags: ['T1001', 'T1015'], pay: 'UPI', old: null },
+      { day: -3, branchId: 'br_ktd', customerId: 'cus_2', tags: ['T1004'], pay: 'Cash', old: { grossWt: 6.2, purityId: 'G22K', deductionPct: 8 } },
+      { day: -2, branchId: 'br_ho', customerId: 'cus_3', tags: ['T1036', 'T1039'], pay: 'Credit Card', old: null },
+      { day: -2, branchId: 'br_ktd', customerId: 'cus_6', tags: ['T1012'], pay: 'UPI', old: null },
+      { day: -1, branchId: 'br_nsk', customerId: 'cus_5', tags: ['T1024'], pay: 'NEFT / RTGS / IMPS', partial: 0.8 },
+      { day: -1, branchId: 'br_nsk', customerId: 'cus_7', tags: ['T1030'], pay: 'Cash', old: null },
+      { day: 0, branchId: 'br_ktd', customerId: 'cus_walkin', tags: ['T1031'], pay: 'Cash' },
     ];
     demo.forEach((d) => {
       const date = U.addDays(today, d.day);
@@ -378,20 +439,24 @@
       let inv = Pricing.calcInvoice({ lines, oldGold, discount: 0, interState: false, payments: [] });
       const payAmt = d.partial ? Math.round(inv.grandTotal * d.partial) : inv.grandTotal;
       data.counters.invoice += 1;
+      const seriesKey = 'invoice:' + d.branchId;
+      data.counters[seriesKey] = (data.counters[seriesKey] || 0) + 1;
       inv = Pricing.calcInvoice(Object.assign(inv, { payments: [{ mode: d.pay, amount: payAmt, ref: '' }] }));
       const fy = U.finYear(date);
       const record = Object.assign(inv, {
-        id: 'inv_' + data.counters.invoice,
-        invoiceNo: settings.invoicePrefix + '/' + fy + '/' + String(data.counters.invoice).padStart(4, '0'),
-        date, customerId: d.customerId, status: 'ACTIVE', createdBy: 'sales', createdAt: date + 'T12:00:00', notes: '',
+        id: 'inv_' + data.counters.invoice, branchId: d.branchId,
+        invoiceNo: settings.invoicePrefix + '/' + branches.find((b) => b.id === d.branchId).code + '/' + fy + '/' + String(data.counters[seriesKey]).padStart(4, '0'),
+        date, customerId: d.customerId, status: 'ACTIVE', createdBy: seller[d.branchId], createdAt: date + 'T12:00:00', notes: '',
       });
       data.invoices.push(record);
       d.tags.forEach((tag) => {
         const piece = stock.find((s) => s.tagNo === tag);
         piece.status = 'SOLD';
         piece.soldInvoiceId = record.id;
+        piece.branchId = d.branchId; // was transferred to the selling branch before the sale
       });
     });
+    distributeStock(data, today);
 
     // Demo pawn loans: one active with an interest payment, one overdue, one redeemed
     const r22 = rates[6].values.G22K;
@@ -400,10 +465,10 @@
       return { description, purityId: 'G22K', grossWt, lessWt, netWt, rate: r22, value: Math.round(netWt * r22 * 100) / 100 };
     };
     const demoPawns = [
-      { customerId: 'cus_2', ago: 75, items: [pawnItem('Gold Chain', 12.4, 0), pawnItem('Ladies Ring', 4.1, 0.3)], principal: 140000, packetNo: 'L1-001',
+      { branchId: 'br_ktd', customerId: 'cus_2', ago: 75, items: [pawnItem('Gold Chain', 12.4, 0), pawnItem('Ladies Ring', 4.1, 0.3)], principal: 140000, packetNo: 'L1-001',
         payments: [{ day: 30, amount: 2100, interestPart: 2100, principalPart: 0, mode: 'UPI', type: 'Payment' }] },
-      { customerId: 'cus_5', ago: 400, items: [pawnItem('Bangles (pair)', 20, 0)], principal: 150000, packetNo: 'L1-002', payments: [] },
-      { customerId: 'cus_1', ago: 200, items: [pawnItem('Jhumka', 8.6, 0.4)], principal: 50000, packetNo: 'L1-003', closedAgo: 20,
+      { branchId: 'br_nsk', customerId: 'cus_5', ago: 400, items: [pawnItem('Bangles (pair)', 20, 0)], principal: 150000, packetNo: 'L1-002', payments: [] },
+      { branchId: 'br_ho', customerId: 'cus_1', ago: 200, items: [pawnItem('Jhumka', 8.6, 0.4)], principal: 50000, packetNo: 'L1-003', closedAgo: 20,
         payments: [{ day: 180, amount: 54500, interestPart: 4500, principalPart: 50000, mode: 'Cash', type: 'Redeem' }] },
     ];
     demoPawns.forEach((d) => {
@@ -412,9 +477,11 @@
       due.setMonth(due.getMonth() + 12);
       const cust = customers.find((c) => c.id === d.customerId);
       data.counters.pawn += 1;
+      const seriesKey = 'pawn:' + d.branchId;
+      data.counters[seriesKey] = (data.counters[seriesKey] || 0) + 1;
       data.pawns.push({
-        id: 'pwn_' + data.counters.pawn,
-        pawnNo: settings.pawnPrefix + '/' + U.finYear(date) + '/' + String(data.counters.pawn).padStart(4, '0'),
+        id: 'pwn_' + data.counters.pawn, branchId: d.branchId,
+        pawnNo: settings.pawnPrefix + '/' + branches.find((b) => b.id === d.branchId).code + '/' + U.finYear(date) + '/' + String(data.counters[seriesKey]).padStart(4, '0'),
         customerId: d.customerId, customerName: cust.name, date, dueDate: U.isoDate(due),
         idProof: 'Aadhaar', idLast4: String(4321 + data.counters.pawn), packetNo: d.packetNo,
         items: d.items, grossWt: Math.round(d.items.reduce((s, i) => s + i.grossWt, 0) * 1000) / 1000, netWt: Math.round(d.items.reduce((s, i) => s + i.netWt, 0) * 1000) / 1000,
@@ -423,11 +490,11 @@
         payoutMode: 'NEFT / RTGS / IMPS', payoutRef: '', notes: '',
         status: d.closedAgo ? 'REDEEMED' : 'ACTIVE', closedOn: d.closedAgo ? U.addDays(today, -d.closedAgo) : '',
         payments: d.payments.map((p) => ({ date: U.addDays(date, p.day), amount: p.amount, interestPart: p.interestPart, principalPart: p.principalPart, mode: p.mode, ref: '', type: p.type, by: 'manager' })),
-        by: 'manager', createdAt: date + 'T11:00:00',
+        by: seller[d.branchId].replace('.sales', '.mgr').replace(/^sales$/, 'manager'), createdAt: date + 'T11:00:00',
       });
     });
     return data;
   }
 
-  global.Seed = { build, waTemplates, settings };
+  global.Seed = { build, waTemplates, settings, branches, branchUsers, distributeStock };
 })(window);

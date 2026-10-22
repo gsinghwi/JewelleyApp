@@ -10,7 +10,7 @@
     { group: 'Sales', ids: ['pos', 'sales', 'payments', 'customers', 'whatsapp'] },
     { group: 'Pawn Broking', ids: ['pawn'] },
     { group: 'Inventory', ids: ['stock', 'purchases', 'vendors'] },
-    { group: 'Admin', ids: ['reports', 'masters', 'settings'] },
+    { group: 'Admin', ids: ['reports', 'branches', 'masters', 'settings'] },
   ];
 
   function hexToRgb(hex) {
@@ -50,11 +50,25 @@
       '<em>' + (latest.at ? 'as of ' + U.fmtDateTime(latest.at) : 'no rates set') + '</em></a>';
   }
 
+  // Role check plus: master-only pages are hidden from sub-branch users
+  const allowed = (p) => p && Auth.can(p.roles) && (!p.masterOnly || Branch.isMaster());
+
+  function branchSwitcher() {
+    if (!Branch.isMaster()) {
+      return '<span class="branch-pill" title="You can only see this branch">' + esc(Branch.name(Branch.userBranchId())) + '</span>';
+    }
+    const v = Branch.viewId();
+    return '<select class="branch-select" title="Branch shown">' +
+      '<option value="ALL"' + (v === 'ALL' ? ' selected' : '') + '>All branches (consolidated)</option>' +
+      Branch.all().filter((b) => b.active !== false).map((b) => '<option value="' + b.id + '"' + (v === b.id ? ' selected' : '') + '>' + esc(b.name) + (b.type === 'MASTER' ? ' (master)' : '') + '</option>').join('') +
+      '</select>';
+  }
+
   function renderShell() {
     const s = DB.settings;
     const u = Auth.user;
     const nav = NAV.map((g) => {
-      const links = g.ids.map((id) => Pages.get(id)).filter((p) => p && Auth.can(p.roles));
+      const links = g.ids.map((id) => Pages.get(id)).filter(allowed);
       if (!links.length) return '';
       return '<div class="nav-group"><div class="nav-title">' + g.group + '</div>' +
         links.map((p) => '<a href="#/' + p.id + '" data-nav="' + p.id + '"><span class="ico">' + p.icon + '</span>' + esc(p.title) + '</a>').join('') + '</div>';
@@ -73,6 +87,7 @@
       '<button class="icon-btn menu-btn" aria-label="Menu">&#9776;</button>' +
       '<h2 class="page-title"></h2>' +
       '<div class="ticker-slot">' + rateTicker() + '</div>' +
+      '<div class="branch-slot">' + branchSwitcher() + '</div>' +
       '<div class="user-menu"><button class="user-btn">' + esc(u.name) + ' <small>' + esc(u.role) + '</small> &#9662;</button>' +
       '<div class="user-drop" hidden><button data-act="password">Change password</button><button data-act="logout">Sign out</button></div></div>' +
       '</header>' +
@@ -81,6 +96,13 @@
       '</main></div>';
 
   }
+
+  root.addEventListener('change', (e) => {
+    if (!e.target.classList.contains('branch-select')) return;
+    Branch.setView(e.target.value);
+    UI.toast('Showing ' + Branch.viewLabel());
+    App.refreshShell();
+  });
 
   // Shell interactions are delegated once on the root, so re-rendering the shell never stacks listeners
   root.addEventListener('click', (e) => {
@@ -94,7 +116,7 @@
     const act = e.target.closest('[data-act]');
     if (!act) return;
     e.preventDefault();
-    if (act.dataset.act === 'logout') { Auth.logout(); history.replaceState(null, '', location.pathname); start(); }
+    if (act.dataset.act === 'logout') { Auth.logout(); Branch.clearView(); history.replaceState(null, '', location.pathname); start(); }
     if (act.dataset.act === 'password') changePassword();
   });
 
@@ -127,7 +149,7 @@
     if (!Auth.user) return;
     const { id, params } = parseHash();
     let page = Pages.get(id);
-    if (!page || !Auth.can(page.roles)) page = Pages.get('dashboard');
+    if (!allowed(page)) page = Pages.get('dashboard');
     root.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === page.id));
     root.querySelector('.page-title').textContent = page.title;
     root.querySelector('.ticker-slot').innerHTML = rateTicker();

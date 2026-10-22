@@ -37,7 +37,7 @@
   }
 
   Pages.register({
-    id: 'vendors', title: 'Vendors', icon: '&#9881;', roles: ['Admin', 'Manager'],
+    id: 'vendors', title: 'Vendors', icon: '&#9881;', roles: ['Admin', 'Manager'], masterOnly: true,
     render(el) {
       el.innerHTML = '<section class="card"><div class="crud"></div></section>';
       const crud = UI.crud(el.querySelector('.crud'), Object.assign({}, Schemas.vendors, {

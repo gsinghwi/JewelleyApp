@@ -245,21 +245,61 @@
       ],
     },
 
+    branches: {
+      col: 'branches', title: 'Branches', singular: 'Branch', modalSize: 'wide', canEdit: isAdmin,
+      fields: (v, isNew) => [
+        { name: 'code', label: 'Branch code', required: true, maxlength: 5, readonly: !isNew, help: 'Short code used in invoice and pawn numbers, e.g. KTD' },
+        { name: 'name', label: 'Branch name', required: true },
+        { name: 'address', label: 'Address', full: true },
+        { name: 'phone', label: 'Phone' },
+        { name: 'manager', label: 'Branch manager' },
+        { name: 'state', label: 'State', type: 'select', options: STATES },
+        { name: 'gstin', label: 'GSTIN (if different from the head office)', maxlength: 15, help: 'Branches in another state need their own GST registration' },
+        { name: 'active', label: 'Active', type: 'checkbox', default: true },
+      ],
+      defaults: () => ({ type: 'BRANCH', state: DB.settings.state, active: true }),
+      beforeSave: (d, isNew, rec) => {
+        d.code = String(d.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!d.code) return 'Enter a branch code (letters / digits)';
+        if (DB.raw('branches').some((b) => b.code === d.code && (!rec || b.id !== rec.id))) return 'Branch code ' + d.code + ' is already used';
+        if (d.gstin && !/^[0-9]{2}[A-Z0-9]{13}$/i.test(d.gstin)) return 'GSTIN should be 15 characters';
+        d.gstin = (d.gstin || '').toUpperCase();
+        if (isNew) d.type = 'BRANCH';
+        if (rec && rec.type === 'MASTER' && d.active === false) return 'The master branch cannot be deactivated';
+        if (rec && d.active === false && DB.raw('stock').some((s) => s.branchId === rec.id && s.status === 'IN_STOCK')) return 'Transfer this branch\'s stock back before deactivating it';
+        return null;
+      },
+      canDelete: (r) => (r.type === 'MASTER' ? 'The master branch cannot be deleted'
+        : ['stock', 'invoices', 'customers', 'pawns'].some((c) => DB.raw(c).some((x) => x.branchId === r.id)) || DB.raw('users').some((u) => u.branchId === r.id)
+          ? 'This branch has stock, sales, customers or users. Deactivate it instead.' : null),
+      columns: [
+        { label: 'Code', key: 'code' },
+        { label: 'Branch', render: (r) => '<b>' + esc(r.name) + '</b>' + (r.type === 'MASTER' ? ' ' + UI.badge('Master', 'gold') : '') + '<br><small class="muted">' + esc(r.address || '') + '</small>' },
+        { label: 'Phone', key: 'phone' },
+        { label: 'Users', align: 'right', render: (r) => DB.raw('users').filter((u) => u.branchId === r.id && u.active).length },
+        { label: 'Status', render: (r) => (r.active === false ? UI.badge('Inactive') : UI.badge('Active', 'ok')) },
+      ],
+    },
+
     users: {
       col: 'users', title: 'Users', singular: 'User', canEdit: isAdmin,
       fields: (v, isNew) => [
         { name: 'username', label: 'Username', required: true, readonly: !isNew },
         { name: 'name', label: 'Full name', required: true },
-        { name: 'role', label: 'Role', type: 'select', required: true, options: ['Admin', 'Manager', 'Sales'] },
+        { name: 'role', label: 'Role', type: 'select', required: true, options: ['Admin', 'Manager', 'Sales'], help: 'Admin is for the master branch only' },
+        { name: 'branchId', label: 'Branch (user sees only this branch)', type: 'select', required: true, options: () => DB.raw('branches').map((b) => ({ value: b.id, label: b.name + (b.type === 'MASTER' ? ' (master - can see all branches)' : '') })) },
         { name: 'password', label: isNew ? 'Password' : 'New password (leave blank to keep)', type: 'password', required: isNew },
         { name: 'active', label: 'Active (can sign in)', type: 'checkbox', default: true },
       ],
-      defaults: () => ({ role: 'Sales', active: true }),
+      defaults: () => ({ role: 'Sales', active: true, branchId: Branch.masterId() }),
       beforeSave: (d, isNew, rec) => {
         const dup = unique('users', 'username', 'Username')(d, isNew, rec);
         if (dup) return dup;
         if (d.password && d.password.length < 6) return 'Password must be at least 6 characters';
-        if (rec && rec.id === Auth.user.id && (!d.active || d.role !== 'Admin')) return 'You cannot deactivate or demote yourself';
+        if (rec && rec.id === Auth.user.id && (!d.active || d.role !== 'Admin' || d.branchId !== Branch.masterId())) return 'You cannot deactivate, demote or move yourself';
+        if (d.role === 'Admin' && d.branchId !== Branch.masterId()) return 'Admin users must belong to the master branch. Use Manager or Sales for branch users.';
+        const br = Branch.get(d.branchId);
+        if (br && br.active === false && d.active) return br.name + ' is inactive. Activate the branch first.';
         if (d.password) { d.salt = U.salt(); d.passwordHash = U.hashPassword(d.password, d.salt); }
         delete d.password;
         return null;
@@ -268,6 +308,7 @@
       columns: [
         { label: 'Username', key: 'username' }, { label: 'Name', key: 'name' },
         { label: 'Role', render: (r) => UI.badge(r.role, r.role === 'Admin' ? 'gold' : '') },
+        { label: 'Branch', render: (r) => esc(Branch.name(r.branchId) || '-') + (r.branchId === Branch.masterId() ? ' ' + UI.badge('Master', 'gold') : '') },
         { label: 'Status', render: (r) => (r.active ? UI.badge('Active', 'ok') : UI.badge('Disabled')) },
       ],
     },

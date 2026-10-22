@@ -21,13 +21,26 @@ cd JewelleryApp
 python3 -m http.server 8080   # then open http://localhost:8080
 ```
 
-Demo logins (change them under **Settings → Users**):
+Demo logins (change them under **Branches & Access** or **Settings → Users**):
 
-| Role    | Username | Password     | Access |
-|---------|----------|--------------|--------|
-| Admin   | admin    | admin123     | Everything, including settings, branding and users |
-| Manager | manager  | manager123   | Everything except settings and users |
-| Sales   | sales    | sales123     | Dashboard, rates (view only), billing, invoices, customers, stock (view only) |
+| Branch | Role | Username | Password | Access |
+|--------|------|----------|----------|--------|
+| Head Office (master) | Admin | admin | admin123 | Everything, all branches, branches & users, settings |
+| Head Office (master) | Manager | manager | manager123 | All branches; everything except settings and users |
+| Head Office (master) | Sales | sales | sales123 | Head office billing, invoices, customers, stock (view) |
+| Kothrud | Manager | kothrud.mgr | kothrud123 | Kothrud only: billing, invoices, customers, pawn loans, online payments, reports |
+| Kothrud | Sales | kothrud.sales | kothrud123 | Kothrud only: billing, invoices, customers, stock (view) |
+| Nashik | Manager | nashik.mgr | nashik123 | Nashik only (as Kothrud manager) |
+| Nashik | Sales | nashik.sales | nashik123 | Nashik only (as Kothrud sales) |
+
+## Branches
+
+- **One master branch** (head office) and any number of sub-branches. Head office Admins create branches and users under **Branches & Access**. Every user belongs to exactly one branch, and Admin users must belong to the master branch.
+- **Branch users only see their own branch:** its stock, sales and invoices, customers, receipts, pawn loans, online payments and reports. Records of other branches are hidden everywhere, including when a link to them is typed directly. Purchases, vendors, master data, settings, rates editing and branch management are head-office only.
+- **Master users** pick **All branches (consolidated)** or any single branch in the top bar. The dashboard shows a per-branch comparison, and **Reports → Branch-wise summary** compares sales, GST, collections, dues, stock value and pawn loans for every branch.
+- **Stock flow:** purchases and new pieces arrive at the master branch. Head office ticks pieces in **Stock → Transfer to branch** to send them to a branch (or back), and each transfer is recorded with a printable **delivery challan**. Branches can only sell stock that is at their branch.
+- **Document numbers:** each branch has its own series, e.g. `INV/KTD/2026-27/0001`, `RCT/NSK/…`, `PWN/HO/…`, `TRF/HO/…`. Invoices print the branch's address (and its GSTIN if a different one is set).
+- **Gold rates and master data** are shared by all branches and maintained by head office.
 
 ## Screens
 
@@ -103,6 +116,7 @@ JewelleryApp/
     ├── pricing.js         # jewellery line pricing and invoice/GST maths
     ├── seed.js            # Indian item master and demo data
     ├── db.js              # data layer: the only file that touches storage
+    ├── branch.js          # branches: current branch view, access filter, document series
     ├── ui.js              # modal, toast, forms, tables, generic master CRUD
     ├── auth.js            # login, roles, branded login page
     ├── biz.js             # shared business helpers
@@ -158,6 +172,7 @@ The app runs only while it is open, so birthday wishes are not sent on their own
 
 ## Prototype limits and next steps
 
+- **Branches need shared storage to work across locations.** In this prototype each device keeps its own copy, so the branch separation can be tried fully on one device, but sales at a branch's own computer will not reach head office until the data moves to a shared database. The access filter also runs in the browser; on a server it must be enforced by the backend as well.
 - **Storage:** data is kept in the browser (`localStorage`) on the computer where the app is used. Take regular backups (Settings → Download backup). To share data across counters or branches, replace `js/db.js` with calls to a backend API and database (for example Node or Django with PostgreSQL). All screens go through `DB`, so nothing else needs to change.
 - **Security:** sign-in is checked inside the browser with salted SHA-256 hashes, which is fine for a demo. A production version needs server-side authentication.
 - **Live rates:** set **Settings → Live rate feed URL** to an endpoint that returns JSON such as `{"G24K": 12850, "G22K": 11780, "S999": 165}`.

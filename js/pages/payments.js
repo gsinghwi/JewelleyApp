@@ -60,7 +60,7 @@
       const cols = [
         { label: 'Date', key: 'createdAt', render: (p) => U.fmtDateTime(p.createdAt), csv: (p) => U.fmtDateTime(p.createdAt) },
         { label: 'Payment ID', key: 'paymentId', render: (p) => '<code>' + esc(p.paymentId || '-') + '</code>' },
-        { label: 'Customer', key: 'customerName', render: (p) => esc(p.customerName || 'Walk-in') },
+        { label: 'Customer', key: 'customerName', render: (p) => esc(p.customerName || 'Walk-in') + (Branch.viewId() === 'ALL' ? '<br><small class="muted">' + esc(Branch.name(p.branchId)) + '</small>' : ''), csv: (p) => (p.customerName || 'Walk-in') + ' / ' + Branch.name(p.branchId) },
         { label: 'Method', key: 'method', render: (p) => esc(PG.METHOD_LABEL[p.method] || '-') + (p.methodDetail ? '<br><small class="muted">' + esc(p.methodDetail) + '</small>' : ''), csv: (p) => (PG.METHOD_LABEL[p.method] || '') + (p.methodDetail ? ' (' + p.methodDetail + ')' : '') },
         { label: 'For', key: 'invoiceNo', render: (p) => (p.invoiceNo ? esc(p.invoiceNo) : p.receiptNo ? esc(p.receiptNo) : p.status === 'failed' ? '-' : UI.badge('Not linked', 'warn')), csv: (p) => p.invoiceNo || p.receiptNo || '' },
         { label: 'Amount', key: 'amount', align: 'right', render: (p) => U.inr(p.amount), csv: (p) => p.amount },

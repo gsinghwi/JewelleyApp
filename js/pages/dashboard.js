@@ -20,6 +20,13 @@
   Pages.register({
     id: 'dashboard', title: 'Dashboard', icon: '&#9673;',
     render(el) {
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-viewbranch]');
+        if (!b) return;
+        e.preventDefault();
+        Branch.setView(b.dataset.viewbranch);
+        App.refreshShell();
+      });
       const today = U.today();
       const month = today.slice(0, 7);
       const invs = Biz.activeInvoices();
@@ -45,7 +52,7 @@
       el.innerHTML =
         '<div class="quick-actions">' +
         '<a class="btn primary" href="#/pos">+ New Sale / Bill</a>' +
-        (Auth.can(['Admin', 'Manager']) ? '<a class="btn" href="#/rates">Update Today\'s Rate</a><a class="btn" href="#/purchases?new=1">+ Purchase Entry</a>' : '') +
+        (Auth.can(['Admin', 'Manager']) && Branch.isMaster() ? '<a class="btn" href="#/rates">Update Today\'s Rate</a><a class="btn" href="#/purchases?new=1">+ Purchase Entry</a>' : '') +
         '<a class="btn" href="#/customers?new=1">+ Customer</a>' +
         (Auth.can(['Admin', 'Manager']) ? '<a class="btn" href="#/reports">Reports</a>' : '') +
         '</div>' +
@@ -55,12 +62,13 @@
         kpi('Stock in Hand', stock.length + ' pcs', U.wt(goldNet) + ' gold · ' + U.wt(silverNet) + ' silver') +
         kpi('Stock Value (today\'s rate)', U.inr(stockValue, { whole: true }), 'before GST') +
         kpi('Customer Dues', U.inr(receivable, { whole: true }), 'receivable', receivable > 0 ? 'warn' : '') +
-        kpi('Vendor Payable', U.inr(payable, { whole: true }), 'to suppliers') +
+        (Branch.isMaster() ? kpi('Vendor Payable', U.inr(payable, { whole: true }), 'to suppliers') : '') +
         (Auth.can(['Admin', 'Manager']) && DB.all('pawns').length ? (() => {
           const ps = Pawn.summary();
           return '<a class="kpi kpi-link' + (ps.overdue ? ' warn' : '') + '" href="#/pawn"><span>Pawn loans out</span><b>' + U.inr(ps.principal, { whole: true }) + '</b><small>' + ps.count + ' active' + (ps.overdue ? ' \u00B7 ' + ps.overdue + ' overdue' : '') + '</small></a>';
         })() : '') +
         '</div>' +
+        (Branch.isMaster() && Branch.viewId() === 'ALL' ? branchCard() : '') +
         '<div class="grid-2">' +
         '<section class="card"><div class="card-head"><h3>Today\'s Rates <small>per gram</small></h3><a href="#/rates">History &rarr;</a></div>' +
         '<div class="rate-cards">' + purities.map((p) => '<div class="rate-card ' + p.metalId.toLowerCase() + '"><span>' + esc(p.name) + '</span><b>' + U.inr(rates[p.id], { whole: true }) + '</b></div>').join('') + '</div>' +
@@ -90,6 +98,35 @@
         '</section></div>';
     },
   });
+
+  // Head office, all-branches view: one row per branch
+  function branchCard() {
+    const today = U.today();
+    const month = today.slice(0, 7);
+    const rates = DB.currentRates();
+    const rows = Branch.all().filter((b) => b.active !== false).map((b) => {
+      const invs = DB.raw('invoices').filter((i) => i.branchId === b.id && i.status !== 'CANCELLED');
+      const stock = DB.raw('stock').filter((s) => s.branchId === b.id && s.status === 'IN_STOCK');
+      const pawns = DB.raw('pawns').filter((p) => p.branchId === b.id && p.status === 'ACTIVE');
+      return {
+        b, today: U.sum(invs.filter((i) => i.date === today), 'grandTotal'), month: U.sum(invs.filter((i) => i.date.slice(0, 7) === month), 'grandTotal'),
+        bills: invs.filter((i) => i.date.slice(0, 7) === month).length, pcs: stock.length, value: U.sum(stock, (s) => Biz.pieceValue(s, rates)),
+        pawn: U.sum(pawns.map((p) => Pawn.calc(p)), 'principal'), due: U.sum(invs, 'balance'),
+      };
+    });
+    return '<section class="card"><div class="card-head"><h3>Branches</h3><a href="#/reports?r=branchSummary">Branch report &rarr;</a></div>' +
+      UI.table({
+        columns: [
+          { label: 'Branch', render: (r) => '<a href="#" data-viewbranch="' + r.b.id + '"><b>' + esc(r.b.name) + '</b></a>' + (r.b.type === 'MASTER' ? ' ' + UI.badge('Master', 'gold') : '') },
+          { label: 'Today', align: 'right', render: (r) => U.inr(r.today, { whole: true }) },
+          { label: 'This month', align: 'right', render: (r) => U.inr(r.month, { whole: true }) + ' <small class="muted">(' + r.bills + ')</small>' },
+          { label: 'Stock', align: 'right', render: (r) => r.pcs + ' pcs <small class="muted">' + U.inr(r.value, { whole: true }) + '</small>' },
+          { label: 'Pawn loans out', align: 'right', render: (r) => U.inr(r.pawn, { whole: true }) },
+          { label: 'Customer dues', align: 'right', render: (r) => (r.due > 0 ? UI.badge(U.inr(r.due, { whole: true }), 'warn') : '-') },
+        ],
+        rows,
+      }) + '</section>';
+  }
 
   function kpi(label, value, sub, cls) {
     return '<div class="kpi ' + (cls || '') + '"><span>' + esc(label) + '</span><b>' + value + '</b><small>' + esc(sub || '') + '</small></div>';

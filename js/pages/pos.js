@@ -24,7 +24,9 @@
   Pages.register({
     id: 'pos', title: 'New Sale / Billing', icon: '&#10010;',
     render(el, params) {
-      if (!draft) draft = blank();
+      // A bill belongs to one branch; switching branch starts a new bill
+      if (draft && draft.branchId !== Branch.workId()) draft = null;
+      if (!draft) draft = Object.assign(blank(), { branchId: Branch.workId() });
       if (params.customer && DB.get('customers', params.customer)) draft.customerId = params.customer;
       const modes = DB.all('paymentModes').filter((m) => m.active !== false).map((m) => m.name);
       const purities = DB.all('purities').filter((p) => p.metalId !== 'NONE');
@@ -36,7 +38,9 @@
         '<div class="field grow"><label>Customer</label><div class="input-row"><input class="cust-input" list="cust-list" placeholder="Search name or mobile..."><button class="btn" data-new-cust>+ New</button></div><datalist id="cust-list"></datalist></div>' +
         '<div class="field"><label>Bill date</label><input type="date" data-h="date"></div>' +
         '<label class="check"><input type="checkbox" data-h="interState"> Inter-state (IGST)</label>' +
-        '</div><div class="cust-info muted small"></div></section>' +
+        '</div><div class="cust-info muted small"></div>' +
+        '<div class="billing-branch">Billing at <b>' + esc(Branch.name(Branch.workId())) + '</b>' +
+        (Branch.viewId() === 'ALL' ? ' <span class="muted">(choose a branch in the top bar to bill for another branch)</span>' : '') + '</div></section>' +
         '<section class="card"><div class="toolbar wrap">' +
         '<input class="scan grow" placeholder="Scan barcode or type Tag no. / HUID and press Enter" autocomplete="off">' +
         '<button class="btn" data-scanqr>&#9638; Scan QR (camera)</button>' +
@@ -170,6 +174,7 @@
         const fail = (message) => { if (!quiet) UI.toast(message, 'error'); return { ok: false, message }; };
         if (!piece) return fail('No stock found for that tag / HUID');
         if (piece.status !== 'IN_STOCK') return fail(piece.tagNo + ' is already sold');
+        if (piece.branchId !== Branch.workId()) return fail(piece.tagNo + ' is at ' + (Branch.name(piece.branchId) || 'another branch') + ', not ' + Branch.name(Branch.workId()));
         if (draft.lines.some((l) => l.stockId === piece.id)) return fail(piece.tagNo + ' is already on this bill');
         const item = Biz.item(piece.itemId);
         const line = Pricing.lineFromStock(piece, item, Biz.hsn(item.hsn), DB.currentRates());
@@ -189,7 +194,7 @@
         });
         const drawList = () => {
           const q = m.el.querySelector('.b-q').value.trim().toLowerCase();
-          const rows = Biz.inStock().filter((s) => !draft.lines.some((l) => l.stockId === s.id)).filter((s) => {
+          const rows = Biz.inStock().filter((s) => s.branchId === Branch.workId() && !draft.lines.some((l) => l.stockId === s.id)).filter((s) => {
             const it = Biz.item(s.itemId);
             return !q || [s.tagNo, s.huid, it.name, it.code, DB.name('categories', it.categoryId)].some((v) => String(v || '').toLowerCase().includes(q));
           }).slice(0, 100);
@@ -279,7 +284,7 @@
         if (inv.grandTotal >= 200000 && !c.pan) { UI.toast('PAN is mandatory for bills of ₹2 lakh or more. Add PAN to the customer.', 'error'); return; }
 
         const record = DB.insert('invoices', Object.assign(inv, {
-          invoiceNo: DB.nextNo('invoice', DB.settings.invoicePrefix || 'INV', inv.date),
+          invoiceNo: DB.nextNo('invoice', DB.settings.invoicePrefix || 'INV', inv.date, draft.branchId), branchId: draft.branchId,
           status: 'ACTIVE', createdBy: Auth.user.username,
         }));
         record.lines.forEach((l) => {
@@ -289,7 +294,7 @@
         });
         record.payments.forEach((p) => PG.link(p.gatewayRecId, { invoiceId: record.id, invoiceNo: record.invoiceNo, customerId: record.customerId, customerName: c.name }));
         DB.persist();
-        draft = blank();
+        draft = null;
         UI.toast('Invoice ' + record.invoiceNo + ' saved');
         App.route();
         if (mode === 'print') UI.print(InvoiceUI.html(record));
@@ -380,7 +385,7 @@
           const online = U.sum(draft.payments.filter((p) => p.gatewayRecId), 'amount');
           if (online && !(await UI.confirm(U.inr(online) + ' was already collected online for this bill. Clearing it leaves that payment unlinked (it stays on the Payments screen for refund or adjustment). Clear anyway?', 'Clear bill'))) return;
           if (!online && draft.lines.length && !(await UI.confirm('Clear this bill?', 'Clear'))) return;
-          draft = blank();
+          draft = null;
           App.route();
         }
       });

@@ -354,7 +354,7 @@
   }
 
   Pages.register({
-    id: 'whatsapp', title: 'WhatsApp', icon: '&#9993;', roles: ['Admin'],
+    id: 'whatsapp', title: 'WhatsApp', icon: '&#9993;', roles: ['Admin'], masterOnly: true,
     render(el, params) {
       let active = TABS.find((t) => t.id === params.tab) ? params.tab : 'wishes';
       el.innerHTML = '<div class="masters"><nav class="tabs">' + TABS.map((t) => '<button data-tab="' + t.id + '">' + esc(t.label) +
