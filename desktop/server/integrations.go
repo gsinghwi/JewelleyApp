@@ -40,7 +40,7 @@ func getSecret(app core.App, id string) map[string]any {
 	if err != nil {
 		return map[string]any{}
 	}
-	return appData(r)
+	return openSecret(app, appData(r))
 }
 
 func saveSecret(app core.App, id string, data map[string]any) error {
@@ -53,7 +53,11 @@ func saveSecret(app core.App, id string, data map[string]any) error {
 		r = core.NewRecord(col)
 		r.Id = id
 	}
-	r.Set("data", data)
+	sealed, err := sealSecret(app, data)
+	if err != nil {
+		return err
+	}
+	r.Set("data", sealed)
 	return app.Save(r)
 }
 
@@ -151,6 +155,7 @@ func registerIntegrations(app core.App) {
 				} else if t := strings.TrimSpace(w.Token); t != "" {
 					cur["token"] = t
 				}
+				auditLog(re.App, re.Auth, "update", "integrations", "whatsapp", "WhatsApp settings changed")
 				if err := saveSecret(re.App, "whatsapp", cur); err != nil {
 					return err
 				}
@@ -167,6 +172,7 @@ func registerIntegrations(app core.App) {
 				} else if s := strings.TrimSpace(p.KeySecret); s != "" {
 					cur["keySecret"] = s
 				}
+				auditLog(re.App, re.Auth, "update", "integrations", "razorpay", "Razorpay keys changed")
 				if err := saveSecret(re.App, "razorpay", cur); err != nil {
 					return err
 				}

@@ -4,6 +4,25 @@
 
   const esc = U.esc;
 
+  // rows of long tables not shown yet ("Show more")
+  const TABLE_PAGE = 200;
+  const tableRest = new Map();
+  let tableSeq = 0;
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-more-rows]');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const t = tableRest.get(+b.dataset.moreRows);
+    const tr = b.closest('tr');
+    if (!t) { tr.remove(); return; }
+    const end = Math.min(t.rows.length, t.next + TABLE_PAGE * 2);
+    tr.insertAdjacentHTML('beforebegin', t.rows.slice(t.next, end).map(t.rowHtml).join(''));
+    t.next = end;
+    if (end >= t.rows.length) { tableRest.delete(+b.dataset.moreRows); tr.remove(); }
+    else tr.querySelector('.muted').textContent = 'Showing ' + end + ' of ' + t.rows.length + '. Use search to find a record quickly.';
+  }, true);
+
   function opts(field) {
     const o = typeof field.options === 'function' ? field.options() : field.options || [];
     return o.map((x) => (typeof x === 'object' ? x : { value: x, label: x }));
@@ -171,11 +190,23 @@
       return out;
     },
 
-    table({ columns, rows, empty, rowAttr, foot }) {
+    /* Long lists show the first rows and a "Show more" button, so screens stay fast with years of
+     * data (totals, search and exports still use every record). */
+    table({ columns, rows, empty, rowAttr, foot, limit }) {
       if (!rows.length) return '<div class="empty">' + esc(empty || 'No records found') + '</div>';
       const th = columns.map((c) => '<th class="' + (c.align || '') + '">' + esc(c.label) + '</th>').join('');
-      const body = rows.map((r) => '<tr ' + (rowAttr ? rowAttr(r) : '') + '>' + columns.map((c) =>
-        '<td class="' + (c.align || '') + '" data-label="' + esc(c.label) + '">' + (c.render ? c.render(r) : esc(r[c.key])) + '</td>').join('') + '</tr>').join('');
+      const rowHtml = (r) => '<tr ' + (rowAttr ? rowAttr(r) : '') + '>' + columns.map((c) =>
+        '<td class="' + (c.align || '') + '" data-label="' + esc(c.label) + '">' + (c.render ? c.render(r) : esc(r[c.key])) + '</td>').join('') + '</tr>';
+      const max = limit || TABLE_PAGE;
+      let more = '';
+      if (rows.length > max) {
+        const id = ++tableSeq;
+        tableRest.set(id, { rows, rowHtml, next: max });
+        if (tableRest.size > 40) tableRest.delete(tableRest.keys().next().value);
+        more = '<tr class="more-row"><td colspan="' + columns.length + '"><button type="button" class="btn sm" data-more-rows="' + id + '">Show more</button> ' +
+          '<span class="muted small">Showing ' + max + ' of ' + rows.length + '. Use search to find a record quickly.</span></td></tr>';
+      }
+      const body = rows.slice(0, max).map(rowHtml).join('') + more;
       const tf = foot ? '<tfoot><tr>' + columns.map((c) => '<td class="' + (c.align || '') + '">' + (foot[c.key] != null ? foot[c.key] : '') + '</td>').join('') + '</tr></tfoot>' : '';
       return '<div class="table-wrap"><table class="grid"><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody>' + tf + '</table></div>';
     },

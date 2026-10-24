@@ -490,3 +490,5 @@ a.kpi-link:hover { border-color: var(--accent); }
 .sync-status.busy { color: #8a6d00; background: rgba(201,162,39,.18); }
 @media (max-width: 720px) { .sync-status { display: none; } }
 .net-urls { margin: 8px 0; padding-left: 20px; font-size: 17px; }
+.banner.ok { background: rgba(46,125,50,.1); color: #2e7d32; }
+.backup-pw .banner { border-radius: 8px; margin-bottom: 10px; }

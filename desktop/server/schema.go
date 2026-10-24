@@ -117,7 +117,8 @@ var specs = []Spec{
 		Columns: []Column{{"transfer_date", "date", "DATE"}, {"pieces", "count", "INT"}, {"net_wt", "netWt", "DECIMAL(12,3)"}}},
 
 	// ---- audit trail ----
-	{Name: "audit", Title: "Audit log", List: ruleMaster + ruleAdmin, Create: ruleAuth, Update: "", Delete: ruleMaster + ruleAdmin,
+	// written only by the server (audit.go); nobody can add, change or delete entries
+	{Name: "audit", Title: "Audit log", List: ruleMaster + ruleAdmin, Create: "", Update: "", Delete: "",
 		Columns: []Column{{"at", "at", "VARCHAR(30)"}, {"user", "user", "VARCHAR(60)"}, {"action", "action", "VARCHAR(20)"}, {"col", "col", "VARCHAR(40)"}}},
 }
 

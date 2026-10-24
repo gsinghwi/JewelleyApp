@@ -6,6 +6,8 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -142,42 +144,90 @@ func serverRunning(cfg Config) bool {
 	return true
 }
 
-// restoreBackup replaces the data folder with the contents of a backup zip.
-// The current data folder is kept as <dataDir>-before-restore-<time>.
-func restoreBackup(cfg Config, file string) error {
+// restoreBackup replaces the data folder with the contents of a backup (.zip or encrypted
+// .jwbackup). The backup is unpacked and checked FIRST; the current data is only moved aside
+// (to <dataDir>-before-restore-<time>) once the backup is known to be a good JewelleryApp database.
+// If anything fails, the current data is left exactly as it was.
+func restoreBackup(cfg Config, file, password string) error {
 	if serverRunning(cfg) {
 		return errors.New("the JewelleryApp database is running. Stop it first: jewellery-server service stop")
 	}
-	zr, err := zip.OpenReader(file)
+	if _, err := os.Stat(file); err != nil {
+		return fmt.Errorf("cannot open backup: %w", err)
+	}
+	stamp := time.Now().Format("20060102-150405.000")
+	parent := filepath.Dir(filepath.Clean(cfg.DataDir))
+	zipPath := file
+
+	// 1. encrypted backup: decrypt to a temporary zip
+	if isEncryptedBackup(file) {
+		if password == "" {
+			fmt.Print("Backup password: ")
+			line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+			password = strings.TrimRight(line, "\r\n")
+		}
+		zipPath = filepath.Join(parent, "restore-"+stamp+".zip")
+		defer os.Remove(zipPath)
+		if err := decryptFile(file, zipPath, password); err != nil {
+			return err
+		}
+	}
+
+	// 2. unpack into a temporary folder next to the data folder
+	tmp := filepath.Clean(cfg.DataDir) + "-restoring-" + stamp
+	defer os.RemoveAll(tmp) // removed if anything below fails (after success it no longer exists)
+	if err := unzipTo(zipPath, tmp); err != nil {
+		return err
+	}
+
+	// 3. check it is a sound JewelleryApp database
+	if err := checkDatabase(filepath.Join(tmp, "data.db")); err != nil {
+		return fmt.Errorf("this backup cannot be used (%v). Your current data has not been changed", err)
+	}
+
+	// 4. swap the folders
+	old := filepath.Clean(cfg.DataDir) + "-before-restore-" + stamp
+	hadData := false
+	if _, err := os.Stat(cfg.DataDir); err == nil {
+		if err := os.Rename(cfg.DataDir, old); err != nil {
+			return fmt.Errorf("cannot move the current data aside (is the database or a file in it open?): %w", err)
+		}
+		hadData = true
+	}
+	if err := os.Rename(tmp, cfg.DataDir); err != nil {
+		if hadData {
+			_ = os.Rename(old, cfg.DataDir) // put the current data back
+		}
+		return fmt.Errorf("cannot put the restored data in place: %w. Your current data has not been changed", err)
+	}
+	fmt.Println("Restored", file)
+	if hadData {
+		fmt.Println("Previous data kept in", old)
+	}
+	fmt.Println("If this backup came from another laptop, enter the Razorpay and WhatsApp keys again in Settings.")
+	fmt.Println("Now start the database: jewellery-server service start")
+	return nil
+}
+
+func unzipTo(zipPath, dir string) error {
+	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return fmt.Errorf("cannot open backup: %w", err)
 	}
 	defer zr.Close()
-	hasDB := false
-	for _, f := range zr.File {
-		if f.Name == "data.db" {
-			hasDB = true
-		}
-	}
-	if !hasDB {
-		return errors.New("this zip is not a JewelleryApp backup (data.db missing)")
-	}
-	old := cfg.DataDir + "-before-restore-" + time.Now().Format("20060102-150405")
-	if _, err := os.Stat(cfg.DataDir); err == nil {
-		if err := os.Rename(cfg.DataDir, old); err != nil {
-			return fmt.Errorf("cannot move the current data aside: %w", err)
-		}
-	}
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	root := filepath.Clean(dir) + string(os.PathSeparator)
 	for _, f := range zr.File {
-		dst := filepath.Join(cfg.DataDir, filepath.FromSlash(f.Name))
-		if !strings.HasPrefix(dst, filepath.Clean(cfg.DataDir)+string(os.PathSeparator)) {
+		dst := filepath.Join(dir, filepath.FromSlash(f.Name))
+		if !strings.HasPrefix(dst, root) {
 			return fmt.Errorf("unsafe path in backup: %s", f.Name)
 		}
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(dst, 0o755)
+			if err := os.MkdirAll(dst, 0o755); err != nil {
+				return err
+			}
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -196,11 +246,32 @@ func restoreBackup(cfg Config, file string) error {
 		rc.Close()
 		out.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("backup is damaged: %w", err)
 		}
 	}
-	fmt.Println("Restored", file)
-	fmt.Println("Previous data kept in", old)
-	fmt.Println("Now start the database: jewellery-server service start")
+	return nil
+}
+
+// checkDatabase opens the restored database read-only and checks it is intact and is JewelleryApp's
+func checkDatabase(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return errors.New("data.db is missing, this is not a JewelleryApp backup")
+	}
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var res string
+	if err := db.QueryRow("PRAGMA integrity_check").Scan(&res); err != nil {
+		return fmt.Errorf("data.db is not a valid database: %v", err)
+	}
+	if res != "ok" {
+		return fmt.Errorf("data.db is damaged: %s", res)
+	}
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM _collections WHERE name IN ('staff','invoices','stock','customers')").Scan(&n); err != nil || n < 4 {
+		return errors.New("data.db is not a JewelleryApp database")
+	}
 	return nil
 }

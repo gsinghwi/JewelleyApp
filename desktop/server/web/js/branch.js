@@ -15,6 +15,7 @@
   'use strict';
 
   const VIEW_KEY = 'jewelleryapp.branchView';
+  let viewMem; // branch shown, kept in memory
   const OWNED = ['stock', 'invoices', 'receipts', 'customers', 'pawns', 'gatewayPayments', 'purchases', 'vendorPayments', 'transfers'];
 
   const Branch = {
@@ -32,6 +33,7 @@
       const m = DB.raw('branches').find((b) => b.type === 'MASTER');
       return m ? m.id : '';
     },
+
 
     name(id) {
       const b = Branch.get(id);
@@ -56,16 +58,20 @@
     viewId() {
       if (!global.Auth || !Auth.user) return 'ALL';
       if (!Branch.isMaster()) return Branch.userBranchId();
-      let v = 'ALL';
-      try { v = sessionStorage.getItem(VIEW_KEY) || 'ALL'; } catch (e) { /* default */ }
-      return v === 'ALL' || Branch.get(v) ? v : 'ALL';
+      if (viewMem === undefined) { // read the saved choice once, then keep it in memory (this is called very often)
+        viewMem = 'ALL';
+        try { viewMem = sessionStorage.getItem(VIEW_KEY) || 'ALL'; } catch (e) { /* default */ }
+      }
+      return viewMem === 'ALL' || Branch.get(viewMem) ? viewMem : 'ALL';
     },
 
     setView(id) {
+      viewMem = id;
       try { sessionStorage.setItem(VIEW_KEY, id); } catch (e) { /* not kept */ }
     },
 
     clearView() {
+      viewMem = undefined;
       try { sessionStorage.removeItem(VIEW_KEY); } catch (e) { /* ignore */ }
     },
 
@@ -84,7 +90,11 @@
 
     visible(col, rec) {
       if (!global.Auth || !Auth.user || OWNED.indexOf(col) < 0) return true;
-      const v = Branch.viewId();
+      return Branch.visibleIn(col, rec, Branch.viewId());
+    },
+
+    // same check with the branch view already worked out (for filtering many records)
+    visibleIn(col, rec, v) {
       if (v === 'ALL') return true;
       if (col === 'transfers') return rec.fromBranchId === v || rec.toBranchId === v;
       return !rec.branchId || rec.branchId === v; // records without a branch (walk-in customer) are shared

@@ -5,6 +5,8 @@ package main
 //   - PocketBase creates a consistent zip of the whole data folder; it is then copied to the
 //     chosen folder (e.g. an external drive or a OneDrive/Google Drive synced folder).
 //   - If the laptop was off at backup time, a catch-up backup runs a few minutes after start.
+//   - Once the Admin sets a backup password, the copies in the backup folder are encrypted
+//     (*.jwbackup); without the password they cannot be opened.
 
 import (
 	"context"
@@ -26,13 +28,14 @@ import (
 const backupJob = "jw-daily-backup"
 
 type BackupStatus struct {
-	At      string `json:"at"`
-	OK      bool   `json:"ok"`
-	File    string `json:"file"`
-	Copy    string `json:"copy"`
-	Size    int64  `json:"size"`
-	Error   string `json:"error"`
-	Trigger string `json:"trigger"`
+	At        string `json:"at"`
+	OK        bool   `json:"ok"`
+	File      string `json:"file"`
+	Copy      string `json:"copy"`
+	Size      int64  `json:"size"`
+	Error     string `json:"error"`
+	Trigger   string `json:"trigger"`
+	Encrypted bool   `json:"encrypted"`
 }
 
 var backupMu sync.Mutex
@@ -103,7 +106,7 @@ func prune(dir string, keep int) {
 	}
 	var names []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), "jewellery-") && strings.HasSuffix(e.Name(), ".zip") {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), "jewellery-") && (strings.HasSuffix(e.Name(), ".zip") || strings.HasSuffix(e.Name(), encBackupExt)) {
 			names = append(names, e.Name())
 		}
 	}
@@ -125,9 +128,16 @@ func runBackup(app core.App, trigger string) BackupStatus {
 		st.File = name
 		src := filepath.Join(app.DataDir(), core.LocalBackupsDirName, name)
 		if err = os.MkdirAll(dir, 0o755); err == nil {
-			dst := filepath.Join(dir, name)
-			st.Size, err = copyFile(src, dst)
-			st.Copy = dst
+			if pw := str(getSecret(app, "backup"), "password", ""); pw != "" {
+				dst := filepath.Join(dir, strings.TrimSuffix(name, ".zip")+encBackupExt)
+				st.Size, err = encryptFile(src, dst, pw)
+				st.Copy = dst
+				st.Encrypted = true
+			} else {
+				dst := filepath.Join(dir, name)
+				st.Size, err = copyFile(src, dst)
+				st.Copy = dst
+			}
 		}
 		prune(filepath.Join(app.DataDir(), core.LocalBackupsDirName), 3) // a few local copies only
 		if err == nil {
@@ -190,7 +200,29 @@ func registerBackups(app core.App) {
 			}
 			return re.JSON(http.StatusOK, map[string]any{
 				"dir": dir, "time": fmt.Sprintf("%02d:%02d", h, m), "keep": keep, "last": readBackupStatus(re.App), "files": files,
+				"encrypted": str(getSecret(re.App, "backup"), "password", "") != "",
 			})
+		}).Bind(apis.RequireAuth(staffCollection))
+
+		// backup password: the copies in the backup folder are encrypted with it
+		e.Router.POST("/api/jw/backup/password", func(re *core.RequestEvent) error {
+			if !isMasterUser(re, "Admin") {
+				return re.ForbiddenError("Only head office Admin can set the backup password.", nil)
+			}
+			var body struct {
+				Password string `json:"password"`
+			}
+			if err := re.BindBody(&body); err != nil || len([]rune(body.Password)) < 10 {
+				return re.BadRequestError("The backup password needs at least 10 characters.", nil)
+			}
+			if weakPasswords[strings.ToLower(body.Password)] {
+				return re.BadRequestError("This password is too easy to guess. Choose another one.", nil)
+			}
+			if err := saveSecret(re.App, "backup", map[string]any{"password": body.Password}); err != nil {
+				return re.InternalServerError("Could not save the backup password.", err)
+			}
+			auditLog(re.App, re.Auth, "backup password set", "settings", "backup", "")
+			return re.JSON(http.StatusOK, map[string]any{"encrypted": true})
 		}).Bind(apis.RequireAuth(staffCollection))
 
 		e.Router.POST("/api/jw/backup", func(re *core.RequestEvent) error {
@@ -198,6 +230,7 @@ func registerBackups(app core.App) {
 				return re.ForbiddenError("Only head office Admin can start a backup.", nil)
 			}
 			st := runBackup(re.App, "manual by "+re.Auth.GetString("username"))
+			auditLog(re.App, re.Auth, "backup", "all", "", st.Copy+" "+st.Error)
 			if !st.OK {
 				return re.BadRequestError("Backup failed: "+st.Error, nil)
 			}

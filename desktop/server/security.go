@@ -87,6 +87,7 @@ func registerSecurity(app core.App) {
 		}
 		failMu.Unlock()
 		if wait > 0 {
+			auditLog(e.App, nil, "sign-in blocked", e.Collection.Name, "", e.Identity+" from "+ip+" (locked after wrong passwords)")
 			return e.TooManyRequestsError("Too many wrong passwords. Try again in "+itoa(minutes(wait))+" minutes, or ask the Admin.", nil)
 		}
 
@@ -104,6 +105,11 @@ func registerSecurity(app core.App) {
 			delete(fails, userKey)
 		}
 		failMu.Unlock()
+		if err != nil {
+			auditLog(e.App, nil, "sign-in failed", e.Collection.Name, "", e.Identity+" from "+ip)
+		} else {
+			auditLog(e.App, e.Record, "sign-in", e.Collection.Name, e.Record.Id, "from "+ip)
+		}
 		return err
 	})
 

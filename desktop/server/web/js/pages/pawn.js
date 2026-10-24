@@ -456,7 +456,7 @@
       function draw() {
         const s = Pawn.summary();
         const month = U.today().slice(0, 7);
-        const collected = U.sum(DB.all('pawns').flatMap((p) => (p.payments || []).filter((x) => x.date.slice(0, 7) === month)), 'interestPart');
+        const collected = U.sum(DB.all('pawns').flatMap((p) => (p.payments || []).filter((x) => String(x.date || '').slice(0, 7) === month)), 'interestPart');
         el.querySelector('.pw-kpis').innerHTML =
           '<div class="kpi"><span>Active pawn loans</span><b>' + s.count + '</b><small>' + U.wt(s.netWt) + ' held</small></div>' +
           '<div class="kpi"><span>Principal outstanding</span><b>' + U.inr(s.principal, { whole: true }) + '</b></div>' +

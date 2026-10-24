@@ -12,7 +12,7 @@ Sign in as `admin` and work through the **checklist** in order. Most of it is un
 | 2 | Settings > Shop details | Shop address, phone, email, **GSTIN**, PAN, BIS hallmark licence no., **State** and **GST state code** | Yes, before the first bill |
 | 3 | Settings > Branding | Logo, login background, colours, tagline | Optional |
 | 4 | Settings > Billing & rates | Invoice / purchase / stock-tag prefixes, hallmark charge per piece, invoice terms | Check the defaults |
-| 5 | Settings > Daily backup | Backup folder (USB, second drive or cloud-synced folder), time, how many to keep. Click **Back up now** once. | Yes |
+| 5 | Settings > Daily backup | Backup folder (USB, second drive or cloud-synced folder), time, how many to keep. Set a **backup password** (write it down, keep it away from the laptop), then click **Back up now** once. | Yes |
 | 6 | Branches & Access | Rename "Head Office" to your shop's name and code, then add sub-branches if you have them | Yes |
 | 7 | Branches & Access > Users | One login per staff member (Admin / Manager / Sales), each in a branch | Yes |
 | 8 | Today's Rates | Click **Refresh live rates** (IBJA) or type today's rates, then **Save rates** | Yes, every day |

@@ -100,7 +100,8 @@ The database admin pages (`/_/`) only open on the server laptop itself, never fr
 | Database | `<data folder>\pb_data` |
 | Daily backups (default) | `<data folder>\backups` |
 | Log file | `<data folder>\logs\server.log` |
-| Emergency database login | `<data folder>\pb_data\superuser-login.txt` (see the [Admin guide](ADMIN-GUIDE.html)) |
+| Emergency database login | `<data folder>\superuser-login.txt` (see the [Admin guide](ADMIN-GUIDE.html)) |
+| Key file for the stored Razorpay / WhatsApp keys | `<data folder>\keys\secrets.key` (not included in backups) |
 | App address | On the laptop `http://localhost:8090`; from other devices `http://<laptop IP>:8090` (shown in Settings) |
 
 ## Troubleshooting

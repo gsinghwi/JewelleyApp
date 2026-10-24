@@ -234,6 +234,7 @@ func registerExportRoutes(app core.App) {
 			re.Response.Header().Set("Content-Type", "application/sql; charset=utf-8")
 			re.Response.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 			re.Response.WriteHeader(http.StatusOK)
+			auditLog(re.App, re.Auth, "export", "all", "", "MySQL export downloaded")
 			return writeMySQL(re.App, re.Response)
 		}).Bind(apis.RequireAuth(staffCollection))
 		return e.Next()

@@ -79,6 +79,7 @@
         '<section class="card"><div class="card-head"><h3>Daily backup</h3></div>' +
         '<p class="muted">The database is backed up automatically every day at the time below (and on the next start if the laptop was off). Save settings after changing the folder or time.</p>' +
         '<div class="backup-form">' + UI.formHtml(backupFields, s) + '</div>' +
+        '<div class="backup-pw"></div>' +
         '<div class="backup-status"><p class="muted">Loading backup status...</p></div>' +
         '<div class="actions-row"><button class="btn" data-backup-now>Back up now</button><span class="spacer"></span>' +
         '<button class="btn" data-export-mysql title="Download all data as a MySQL 8 script (see docs/MIGRATE-TO-MYSQL)">Export for MySQL</button></div>' +
@@ -170,8 +171,28 @@
 
       // ---- Backups ----
       const statusBox = el.querySelector('.backup-status');
+      const pwBox = el.querySelector('.backup-pw');
+      const renderPw = (encrypted) => {
+        pwBox.innerHTML = (encrypted
+          ? '<div class="banner ok">Backups in the folder are <b>encrypted</b> with your backup password. Keep the password safe (not on this laptop): without it a backup cannot be restored.</div>'
+          : '<div class="banner warn"><b>Backups are not encrypted.</b> Anyone who gets a backup file (USB, OneDrive, Google Drive) can read all customer data. Set a backup password to encrypt them.</div>') +
+          '<div class="form-grid"><div class="field"><label>' + (encrypted ? 'Change backup password' : 'Backup password') + '</label><input type="password" name="bkpw" autocomplete="new-password" placeholder="At least 10 characters"></div>' +
+          '<div class="field"><label>Confirm backup password</label><input type="password" name="bkpw2" autocomplete="new-password"></div></div>' +
+          '<div class="actions-row"><button class="btn" data-bkpw>' + (encrypted ? 'Change password' : 'Set password and encrypt backups') + '</button></div>';
+      };
+      pwBox.addEventListener('click', async (e) => {
+        if (!e.target.closest('[data-bkpw]')) return;
+        const a = pwBox.querySelector('[name=bkpw]').value, b2 = pwBox.querySelector('[name=bkpw2]').value;
+        if (a.length < 10) { UI.toast('The backup password needs at least 10 characters', 'error'); return; }
+        if (a !== b2) { UI.toast('The two passwords do not match', 'error'); return; }
+        if (!(await UI.confirm('Write this password down and keep it away from this laptop. Without it, encrypted backups cannot be restored - not even by support. Continue?', 'Yes, I have written it down'))) return;
+        DB.api('backup/password', { method: 'POST', body: { password: a } })
+          .then(() => { UI.toast('Backup password saved. Backups from now on are encrypted.'); loadBackup(); })
+          .catch((ex) => UI.toast(DB.errorText(ex), 'error'));
+      });
       function loadBackup() {
         DB.api('backup').then((b) => {
+          renderPw(!!b.encrypted);
           const last = b.last || {};
           const files = (b.files || []).sort((x, y) => (x.name < y.name ? 1 : -1));
           statusBox.innerHTML =
@@ -212,13 +233,18 @@
         }
       });
 
-      el.querySelector('.audit').innerHTML = UI.table({
-        columns: [
-          { label: 'When', render: (a) => U.fmtDateTime(a.at) }, { label: 'User', key: 'user' },
-          { label: 'Action', key: 'action' }, { label: 'Record', render: (a) => esc(a.col + ' ' + (a.id || '')) },
-        ],
-        rows: DB.all('audit').slice(-25).reverse(), empty: 'No activity yet',
-      });
+      const auditBox = el.querySelector('.audit');
+      auditBox.innerHTML = '<p class="muted">Loading...</p>';
+      DB.recentActivity(50).then((rows) => {
+        auditBox.innerHTML = UI.table({
+          columns: [
+            { label: 'When', render: (a) => U.fmtDateTime(a.at) }, { label: 'User', key: 'user' },
+            { label: 'Action', key: 'action' }, { label: 'What', render: (a) => esc(a.col) },
+            { label: 'Details', render: (a) => '<small>' + esc(a.summary || a.id || '') + '</small>' },
+          ],
+          rows, empty: 'No activity yet',
+        });
+      }).catch((ex) => { auditBox.innerHTML = '<p class="muted">' + esc(DB.errorText(ex)) + '</p>'; });
     },
   });
 })();

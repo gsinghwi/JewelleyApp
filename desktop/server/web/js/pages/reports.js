@@ -320,8 +320,11 @@
             else if (out.totals[c.key] != null) foot[c.key] = '<b>' + (c.render ? c.render(out.totals) : esc(U.r3(out.totals[c.key]))) + '</b>';
           });
         }
-        el.querySelector('.report-out').innerHTML = (out.note ? '<p class="muted small">' + esc(out.note) + '</p>' : '') +
-          '<p class="muted small">' + out.rows.length + ' row(s)</p>' + UI.table({ columns: out.columns, rows: out.rows, foot, empty: 'No data for the selected filters' });
+        // limit: the screen shows the first rows; printing uses every row
+        const html = (limit) => (out.note ? '<p class="muted small">' + esc(out.note) + '</p>' : '') +
+          '<p class="muted small">' + out.rows.length + ' row(s)</p>' + UI.table({ columns: out.columns, rows: out.rows, foot, limit, empty: 'No data for the selected filters' });
+        out.fullHtml = () => html(Infinity);
+        el.querySelector('.report-out').innerHTML = html();
       }
 
       function select(r) {
@@ -354,7 +357,7 @@
           const s = DB.settings;
           UI.print('<div class="report-print"><h2>' + esc(s.shopName) + '</h2><h3>' + esc(current.title) + '</h3><p>' +
             (current.params.includes('range') ? 'Period: ' + U.fmtDate(p.from) + ' to ' + U.fmtDate(p.to) + ' &middot; ' : '') + 'Branch: ' + esc(current.id === 'branchSummary' ? 'All branches' : Branch.viewLabel()) + ' &middot; Generated ' + U.fmtDateTime(new Date().toISOString()) + ' by ' + esc(Auth.user.name) + '</p>' +
-            el.querySelector('.report-out').innerHTML + '</div>');
+            current.last.fullHtml() + '</div>');
         }
       });
       el.addEventListener('change', (e) => {

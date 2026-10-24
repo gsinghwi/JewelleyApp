@@ -6,7 +6,7 @@
 //	jewellery-server service start|stop|uninstall|status
 //	jewellery-server export-mysql --out data.sql
 //	jewellery-server backup              create a backup now (service must be stopped, or use the app)
-//	jewellery-server restore --file backup.zip   (service must be stopped)
+//	jewellery-server restore --file backup.zip|.jwbackup [--password X]   (service must be stopped)
 //	jewellery-server superuser upsert EMAIL PASS (PocketBase dashboard login)
 package main
 
@@ -100,6 +100,7 @@ func newApp(cfg Config) *pocketbase.PocketBase {
 	registerHooks(app)
 	registerSecurity(app)
 	registerBusinessRules(app)
+	registerAudit(app)
 
 	// Prepare the database before serving: collections, default data, first superuser
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{
@@ -141,11 +142,16 @@ func setupDatabase(app core.App) error {
 	if err := seedIfEmpty(app); err != nil {
 		return err
 	}
-	return ensureSuperuser(app)
+	if err := ensureSuperuser(app); err != nil {
+		return err
+	}
+	protectAtRest(app)
+	return nil
 }
 
 // The PocketBase dashboard (/_/) needs a superuser. One is created on first start with a random
-// password written to <dataDir>/superuser-login.txt (only readable on this computer).
+// password written to <data folder>/superuser-login.txt, outside the database folder so it is
+// never inside a backup (only readable on this computer).
 func ensureSuperuser(app core.App) error {
 	col, err := app.FindCachedCollectionByNameOrId(core.CollectionNameSuperusers)
 	if err != nil {
@@ -167,7 +173,7 @@ func ensureSuperuser(app core.App) error {
 	note := "PocketBase dashboard (advanced, for support only): http://" + localAddr(loadConfig().HttpAddr) + "/_/\r\n" +
 		"Email:    admin@jewelleryapp.local\r\nPassword: " + pass + "\r\n" +
 		"Change it from the dashboard after the first login.\r\n"
-	return os.WriteFile(filepath.Join(app.DataDir(), "superuser-login.txt"), []byte(note), 0o600)
+	return os.WriteFile(superuserNotePath(app), []byte(note), 0o600)
 }
 
 func main() {
@@ -185,19 +191,24 @@ func main() {
 			runService(cfg)
 			return
 		case "restore":
-			file := ""
+			file, password := "", ""
 			for i := 2; i < len(os.Args); i++ {
-				if strings.HasPrefix(os.Args[i], "--file=") {
+				switch {
+				case strings.HasPrefix(os.Args[i], "--file="):
 					file = strings.TrimPrefix(os.Args[i], "--file=")
-				} else if os.Args[i] == "--file" && i+1 < len(os.Args) {
+				case os.Args[i] == "--file" && i+1 < len(os.Args):
 					file = os.Args[i+1]
+				case strings.HasPrefix(os.Args[i], "--password="):
+					password = strings.TrimPrefix(os.Args[i], "--password=")
+				case os.Args[i] == "--password" && i+1 < len(os.Args):
+					password = os.Args[i+1]
 				}
 			}
 			if file == "" {
-				fmt.Fprintln(os.Stderr, "use: jewellery-server restore --file <backup.zip>")
+				fmt.Fprintln(os.Stderr, "use: jewellery-server restore --file <backup.zip | backup.jwbackup> [--password <backup password>]")
 				os.Exit(1)
 			}
-			if err := restoreBackup(cfg, file); err != nil {
+			if err := restoreBackup(cfg, file, password); err != nil {
 				fmt.Fprintln(os.Stderr, "error:", err)
 				os.Exit(1)
 			}

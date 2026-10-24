@@ -49,7 +49,7 @@ JEWELLERY_DATA_DIR=./pb_data go run .      # listens on 0.0.0.0:8090
 | (none) | Run the server on the configured address |
 | `service install / uninstall / start / stop / restart / status` | Manage the Windows service |
 | `backup` | Take a backup now (to the configured backup folder) |
-| `restore --file <zip>` | Restore a backup (service must be stopped) |
+| `restore --file <zip or jwbackup> [--password X]` | Restore a backup, checked before it replaces anything (service must be stopped) |
 | `export-mysql --out <file.sql>` | Export everything as a MySQL 8 script |
 | `config --data-dir <dir> --http <addr>` | Write `jewellery.json` (used by the installer) |
 | `version` | Print the version |
@@ -61,4 +61,6 @@ Each collection keeps the app record as JSON (`data`), plus indexed `branchId` a
 - **Branch isolation:** server-side API rules make sure branch users can only read and write their own branch's records.
 - **Document numbers:** invoices, receipts, pawn tickets, purchases, transfers, stock tags and customer codes are assigned by the server, per branch and financial year. No duplicates even with several counters billing at once.
 - **Network:** the server listens on all network cards (`0.0.0.0:8090`; set `httpAddr` in `jewellery.json` to `127.0.0.1:8090` for this laptop only). The PocketBase admin UI and superuser APIs only answer requests from the laptop itself.
-- **Secrets:** Razorpay and WhatsApp keys are kept in a superuser-only collection and used only by the server.
+- **Secrets:** Razorpay and WhatsApp keys are kept in a superuser-only collection, encrypted with a key file outside the database folder (so never in a backup), and used only by the server.
+- **Backups:** encrypted with the Admin's backup password (AES-256-GCM, scrypt) once it is set. Restore validates a backup before swapping it in.
+- **Activity log:** written by the server (`audit.go`); staff cannot create, edit or delete entries.

@@ -51,7 +51,7 @@ Easy passwords such as `admin123` or the username itself are refused. A disabled
 
 The installer creates an emergency database account:
 
-1. On the server laptop, open `<data folder>\pb_data\superuser-login.txt` (for example `C:\ProgramData\JewelleryApp\pb_data\superuser-login.txt`) as administrator. It contains an email and password.
+1. On the server laptop, open `<data folder>\superuser-login.txt` (for example `C:\ProgramData\JewelleryApp\superuser-login.txt`) as administrator. It contains an email and password.
 2. Open `http://localhost:8090/_/` in a browser **on the server laptop** and sign in with them. This page is refused from other devices.
 3. Open the **staff** collection, then the `admin` record. Set a new password (enter it twice) and tick **mustChangePassword**. Save.
 4. Sign in to JewelleryApp with the new password.
@@ -96,12 +96,19 @@ Always check the rates before saving. Bills use the latest **saved** rates.
 
 ## Activity log
 
-**Settings > Recent activity** shows who created, changed or deleted records. Bills are never deleted, only cancelled. A cancelled bill puts its pieces back into stock.
+**Settings > Recent activity** shows the latest 50 entries. The server writes the log itself, so nobody can add, change or delete entries, not even the Admin. It records:
+
+- every record created, changed or deleted, with the user and what changed (for example `status: ACTIVE -> CANCELLED`);
+- sign-ins, failed sign-ins and blocked sign-ins;
+- password changes and resets;
+- backups, the backup password, data exports, and Razorpay / WhatsApp key changes.
+
+Bills are never deleted, only cancelled. A cancelled bill puts its pieces back into stock.
 
 ## Security checklist
 
 - Change the `admin123` password at the first sign in (forced).
 - Give every staff member their own login. Don't share the admin login.
 - Keep Windows updated and use a Windows password on the server laptop.
-- Keep backups private: they contain all customer data and the payment / WhatsApp keys.
+- Set a backup password (Settings > Daily backup) so backups in USB, OneDrive or Google Drive folders are encrypted. Keep the password away from the laptop.
 - Other devices can reach the app only on **Private** networks (the shop Wi-Fi), never on public Wi-Fi. Use a WPA2/WPA3 password on the shop Wi-Fi, and keep customers on a separate guest network. To lock the app to the server laptop only, see [Installation](INSTALL.html).

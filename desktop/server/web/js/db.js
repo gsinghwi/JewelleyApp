@@ -18,7 +18,7 @@
 
   const COLLECTIONS = ['branches', 'currencies', 'categories', 'metals', 'purities', 'hsn', 'stoneTypes', 'paymentModes', 'customerGroups',
     'items', 'rates', 'waTemplates', 'waLog', 'vendors', 'purchases', 'vendorPayments', 'customers', 'stock', 'invoices', 'receipts',
-    'pawns', 'gatewayPayments', 'transfers', 'audit'];
+    'pawns', 'gatewayPayments', 'transfers'];
   const OWNED = ['purchases', 'vendorPayments', 'customers', 'stock', 'invoices', 'receipts', 'pawns', 'gatewayPayments'];
   const NUMBERED = { invoices: 'invoiceNo', receipts: 'receiptNo', pawns: 'pawnNo', purchases: 'purchaseNo', transfers: 'transferNo', stock: 'tagNo', customers: 'code' };
   const FULL_CHECK_LIMIT = 3000; // larger collections only sync records marked as changed
@@ -34,6 +34,31 @@
   }
 
   // ---- mapping between app objects and PocketBase records ----
+  // Safe defaults so one damaged or incomplete record cannot break a screen
+  const SHAPES = {
+    invoices: { arr: ['lines', 'payments', 'settlements', 'oldGold'], str: ['date', 'status', 'customerId'], num: ['grandTotal', 'paid', 'balance', 'taxable', 'cgst', 'sgst', 'igst'] },
+    receipts: { str: ['date', 'customerId', 'mode'], num: ['amount'] },
+    pawns: { arr: ['items', 'payments', 'extensions'], str: ['date', 'dueDate', 'status', 'customerId'], num: ['principal', 'interestPct', 'netWt', 'grossWt', 'value'] },
+    stock: { str: ['status', 'itemId', 'purityId', 'tagNo'], num: ['netWt', 'grossWt', 'stoneWt', 'costPrice'] },
+    purchases: { arr: ['lines'], str: ['billDate', 'vendorId'], num: ['total', 'paid'] },
+    vendorPayments: { str: ['date', 'vendorId'], num: ['amount'] },
+    transfers: { arr: ['pieces'], str: ['date'] },
+    customers: { str: ['name', 'phone'] },
+    vendors: { str: ['name', 'phone'] },
+    items: { str: ['name', 'categoryId', 'purityId'] },
+    rates: { str: ['at', 'source'] },
+    gatewayPayments: { str: ['status', 'createdAt'], num: ['amount'] },
+  };
+  function normalize(col, o) {
+    const sh = SHAPES[col];
+    if (!sh) return o;
+    (sh.arr || []).forEach((k) => { if (!Array.isArray(o[k])) o[k] = []; });
+    (sh.str || []).forEach((k) => { if (typeof o[k] !== 'string') o[k] = o[k] == null ? '' : String(o[k]); });
+    (sh.num || []).forEach((k) => { if (typeof o[k] !== 'number' || !isFinite(o[k])) o[k] = Number(o[k]) || 0; });
+    if (col === 'rates' && (typeof o.values !== 'object' || !o.values)) o.values = {};
+    return o;
+  }
+
   function toApp(col, r) {
     if (col === 'users') {
       const u = { id: r.id };
@@ -46,7 +71,7 @@
     if (col === 'transfers') { o.fromBranchId = r.fromBranchId || o.fromBranchId; o.toBranchId = r.toBranchId || o.toBranchId; }
     if (NUMBERED[col] && r.docNo) o[NUMBERED[col]] = r.docNo;
     if (col === 'customers' && r.branchId === '' && o.branchId === '') delete o.branchId; // shared (walk-in)
-    return o;
+    return normalize(col, o);
   }
 
   function toPB(col, o) {
@@ -90,7 +115,7 @@
       await this.loadPublicSettings();
       const lists = await Promise.all(COLLECTIONS.map(async (col) => {
         try {
-          return [col, await pb.collection(col).getFullList({ batch: 500, sort: 'created' })];
+          return [col, await pb.collection(col).getFullList({ batch: 1000, sort: 'created' })];
         } catch (e) {
           return [col, []]; // not allowed for this user
         }
@@ -105,6 +130,7 @@
     },
 
     setCollection(col, recs) {
+      this.changed();
       this.data[col] = recs.map((r) => toApp(col, r));
       this.snap[col] = {};
       this.data[col].forEach((o) => { this.snap[col][o.id] = sig(col, o); });
@@ -112,6 +138,7 @@
     },
 
     clear() {
+      this.changed();
       try { pb.realtime.unsubscribe(); } catch (e) { /* ignore */ }
       this.data = { settings: this.data.settings || {} };
       this.snap = {};
@@ -120,6 +147,18 @@
     },
 
     get settings() { return this.data.settings; },
+
+    // Cached lookups (filtered lists, id index, per-customer totals) are rebuilt only after a change
+    ver: 0,
+    cache: {},
+    changed() { this.ver++; },
+    memo(key, fn) {
+      const c = this.cache[key];
+      if (c && c.v === this.ver) return c.val;
+      const val = fn();
+      this.cache[key] = { v: this.ver, val };
+      return val;
+    },
 
     saveSettings(patch) {
       Object.assign(this.data.settings, patch || {});
@@ -141,11 +180,17 @@
 
     all(col) {
       const arr = this.raw(col);
-      return global.Branch && Branch.OWNED.indexOf(col) >= 0 && global.Auth && Auth.user ? arr.filter((r) => Branch.visible(col, r)) : arr;
+      if (!(global.Branch && Branch.OWNED.indexOf(col) >= 0 && global.Auth && Auth.user)) return arr;
+      const v = Branch.viewId();
+      if (v === 'ALL') return arr;
+      return this.memo('all:' + col + ':' + v + ':' + arr.length, () => arr.filter((r) => Branch.visibleIn(col, r, v)));
     },
 
     get(col, id) {
-      return this.all(col).find((x) => x.id === id) || null;
+      const arr = this.raw(col);
+      const idx = this.memo('idx:' + col + ':' + arr.length, () => new Map(arr.map((r) => [r.id, r])));
+      const r = idx.get(id);
+      return r && (!global.Branch || Branch.visible(col, r)) ? r : null;
     },
 
     find(col, pred) {
@@ -187,6 +232,7 @@
       const arr = this.raw(col);
       const have = arr.find((x) => x.id === o.id); // the realtime event can arrive before the reply
       if (have) o = Object.assign(have, o); else arr.push(o);
+      this.changed();
       this.snap[col] = this.snap[col] || {};
       this.snap[col][o.id] = sig(col, o);
       this.audit('create', col, o.id);
@@ -206,6 +252,7 @@
     },
 
     insert(col, obj) {
+      this.changed();
       const rec = Object.assign({ id: U.uid(col.slice(0, 3)) }, obj, { createdAt: obj.createdAt || new Date().toISOString() });
       this.stampBranch(col, rec);
       if (col === 'users') {
@@ -231,6 +278,7 @@
     },
 
     update(col, id, patch) {
+      this.changed();
       const rec = this.raw(col).find((x) => x.id === id);
       if (!rec) return null;
       const password = patch && patch.password;
@@ -263,6 +311,7 @@
     },
 
     removeLocal(col, id) {
+      this.changed();
       const arr = this.raw(col);
       const i = arr.findIndex((x) => x.id === id);
       if (i >= 0) arr.splice(i, 1);
@@ -271,6 +320,7 @@
 
     // Saves every record changed in place since the last sync (and the settings)
     persist() {
+      this.changed();
       Object.keys(this.data).forEach((col) => {
         if (col === 'settings' || col === 'users' || !Array.isArray(this.data[col]) || !this.snap[col]) return;
         const arr = this.data[col];
@@ -287,6 +337,7 @@
 
     // A record the server created or changed itself (e.g. a payment it recorded): add it to the screen copy
     ingest(col, r) {
+      this.changed();
       const o = toApp(col, r);
       const arr = this.raw(col);
       const i = arr.findIndex((x) => x.id === o.id);
@@ -297,6 +348,7 @@
 
     // Show a change the server makes by itself (e.g. a piece marked sold by a bill) without sending it
     setLocal(col, id, patch) {
+      this.changed();
       const rec = this.raw(col).find((x) => x.id === id);
       if (!rec) return null;
       Object.assign(rec, patch);
@@ -333,13 +385,15 @@
       App.softRefresh();
     },
 
-    audit(action, col, id) {
-      if (col === 'audit' || !global.Auth || !Auth.user) return;
-      const entry = { at: new Date().toISOString(), user: Auth.user.username, action, col, id };
-      this.raw('audit').push(entry);
-      pb.collection('audit').create({ data: entry }).catch(() => {});
+    // The activity log is written by the server (who did what, when); nothing to send from here
+    audit() {},
+    log() {},
+
+    // Latest activity log entries (head office Admin only)
+    async recentActivity(limit) {
+      const res = await pb.collection('audit').getList(1, limit || 50, { sort: '-created' });
+      return res.items.map((r) => r.data || {});
     },
-    log(action, col, id) { this.audit(action, col, id); },
 
     // ---- realtime: changes from other computers ----
     subscribe() {
@@ -362,6 +416,7 @@
           arr.push(o);
         }
         snaps[o.id] = s;
+        this.changed();
         App.softRefresh();
       };
       COLLECTIONS.concat(['staff']).forEach((col) => { pb.collection(col).subscribe('*', handle(col)).catch(() => {}); });
@@ -376,7 +431,7 @@
 
     // ---- rates and derived balances (unchanged from the prototype) ----
     rateHistory() {
-      return this.all('rates').slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+      return this.memo('rates', () => this.all('rates').slice().sort((a, b) => new Date(a.at) - new Date(b.at)));
     },
 
     latestRate() {
@@ -389,8 +444,17 @@
     },
 
     customerSummary(customerId) {
-      const invs = this.all('invoices').filter((i) => i.customerId === customerId && i.status !== 'CANCELLED');
-      const receipts = this.all('receipts').filter((r) => r.customerId === customerId);
+      // bills and receipts grouped by customer once, instead of scanning everything per customer
+      const byCust = this.memo('cust:' + (global.Branch ? Branch.viewId() : ''), () => {
+        const m = new Map();
+        const slot = (id) => { let x = m.get(id); if (!x) { x = { invs: [], receipts: [] }; m.set(id, x); } return x; };
+        this.all('invoices').forEach((i) => { if (i.status !== 'CANCELLED') slot(i.customerId).invs.push(i); });
+        this.all('receipts').forEach((r) => slot(r.customerId).receipts.push(r));
+        return m;
+      });
+      const g = byCust.get(customerId) || { invs: [], receipts: [] };
+      const invs = g.invs;
+      const receipts = g.receipts;
       const billed = U.sum(invs, 'grandTotal');
       const paidAtBill = U.sum(invs, 'paid');
       const received = U.sum(receipts, 'amount');

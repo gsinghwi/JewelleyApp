@@ -95,8 +95,16 @@
       '<div class="user-drop" hidden><button data-act="password">Change password</button><button data-act="logout">Sign out</button></div></div>' +
       '</header>' +
       (!DB.latestRate().at ? '<div class="banner warn">No gold / silver rates are saved yet. Bills need today\'s rates: open <a href="#/rates">Today\'s Rates</a> and refresh or enter them.</div>' : '') +
+      '<div class="backup-nag"></div>' +
       '<div id="view" class="view"></div>' +
       '</main></div>';
+    // remind the head office Admin until backups are encrypted
+    if (Auth.can(['Admin']) && Branch.isMaster()) {
+      DB.api('backup').then((b) => {
+        const nag = root.querySelector('.backup-nag');
+        if (nag && !b.encrypted) nag.innerHTML = '<div class="banner warn">Backups are not encrypted yet. Set a backup password in <a href="#/settings">Settings &rsaquo; Daily backup</a>.</div>';
+      }).catch(() => {});
+    }
 
   }
 
@@ -164,7 +172,16 @@
     const view = old.cloneNode(false);
     old.replaceWith(view);
     window.scrollTo(0, 0);
-    page.render(view, params);
+    try {
+      page.render(view, params);
+    } catch (e) {
+      // a damaged record must not take the whole screen down
+      console.error(e);
+      view.innerHTML = '<section class="card"><h3>This screen could not be shown</h3>' +
+        '<p class="muted">Something in the data could not be read: <code>' + esc(e.message || String(e)) + '</code></p>' +
+        '<p class="muted small">Other screens still work. Tell the head office Admin which screen this was; the activity log in Settings shows recent changes.</p>' +
+        '<button class="btn" onclick="location.reload()">Reload</button></section>';
+    }
   }
 
   function loading(text) {
