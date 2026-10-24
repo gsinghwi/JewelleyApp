@@ -22,6 +22,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/hook"
 )
 
 const serviceName = "JewelleryAppDB"
@@ -46,8 +47,8 @@ func (p *program) run() {
 		log.Println("bootstrap failed:", err)
 		os.Exit(1)
 	}
-	log.Println("JewelleryApp database starting on", p.cfg.HttpAddr, "data:", p.cfg.DataDir)
-	if err := apis.Serve(p.app, apis.ServeConfig{HttpAddr: p.cfg.HttpAddr}); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	log.Println("JewelleryApp database starting on", p.cfg.HttpAddr, p.cfg.HttpsAddr, "data:", p.cfg.DataDir)
+	if err := serveApp(p.app, p.cfg); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Println("server stopped with error:", err)
 		os.Exit(1)
 	}
@@ -130,6 +131,49 @@ func serviceCommand(cfg Config, args []string) error {
 	}
 	return fmt.Errorf("unknown service action %q", args[0])
 }
+
+// serveApp runs the web server: HTTPS for every device (with the shop's own certificate) and
+// plain HTTP for the server laptop itself plus the device setup page.
+func serveApp(app *pocketbase.PocketBase, cfg Config) error {
+	if strings.EqualFold(cfg.HttpsAddr, "off") {
+		return apis.Serve(app, apis.ServeConfig{HttpAddr: cfg.HttpAddr, AllowedOrigins: allowedOrigins(cfg)})
+	}
+	shop, err := newShopTLS(filepath.Dir(filepath.Clean(cfg.DataDir)))
+	if err != nil {
+		return fmt.Errorf("could not prepare the HTTPS certificate: %w", err)
+	}
+	shopCert = shop
+	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{
+		Priority: 1000,
+		Func: func(e *core.ServeEvent) error {
+			e.Server.TLSConfig = shop.TLSConfig()
+			if err := e.Next(); err != nil { // builds the routes and opens the HTTPS listener
+				return err
+			}
+			if cfg.HttpAddr != "" {
+				plain := &http.Server{
+					Addr:              cfg.HttpAddr,
+					Handler:           shop.httpHandler(e.Server.Handler, portOf(cfg.HttpsAddr, "8443")),
+					ReadHeaderTimeout: time.Minute,
+				}
+				go func() {
+					if err := plain.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+						e.App.Logger().Error("HTTP listener stopped", "error", err)
+					}
+				}()
+				e.App.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+					plain.Close()
+					return te.Next()
+				})
+			}
+			return nil
+		},
+	})
+	return apis.Serve(app, apis.ServeConfig{HttpsAddr: cfg.HttpsAddr, AllowedOrigins: allowedOrigins(cfg)})
+}
+
+// shopCert is set while serving over HTTPS (used by the network / setup routes)
+var shopCert *shopTLS
 
 // ---- restore ----
 

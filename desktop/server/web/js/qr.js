@@ -259,7 +259,7 @@
           }
         } catch (e) { detector = null; }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          msg('The browser only allows the live camera on the server laptop itself (http://localhost:8090). On this device use "Scan from a photo" or a USB barcode / QR scanner (it types the tag into the scan box).', 'warn-text');
+          msg('The browser blocks the camera on this connection. Open JewelleryApp with its https:// address (see Settings > Open on other laptops / tablets) after installing the shop certificate, or use "Scan from a photo" or a USB barcode / QR scanner.', 'warn-text');
           return;
         }
         try {

@@ -4,6 +4,9 @@
 
   const esc = U.esc;
 
+  // forms are saved by their buttons, never submitted (replaces inline onsubmit handlers)
+  document.addEventListener('submit', (e) => { if (e.target.matches('[data-nosubmit]')) e.preventDefault(); }, true);
+
   // rows of long tables not shown yet ("Show more")
   const TABLE_PAGE = 200;
   const tableRest = new Map();
@@ -92,7 +95,7 @@
         let answered = false;
         const m = UI.modal({
           title: 'Please confirm',
-          body: '<p>' + esc(message) + '</p>',
+          body: '<p class="confirm-text">' + esc(message) + '</p>',
           actions: [
             { label: 'Cancel', cls: 'btn', onClick: () => { answered = true; resolve(false); } },
             { label: okLabel || 'Yes, continue', cls: 'btn danger', onClick: () => { answered = true; resolve(true); } },
@@ -142,7 +145,7 @@
 
     formHtml(fields, values) {
       values = values || {};
-      return '<form class="form-grid" onsubmit="return false">' + fields.map((f) => UI.fieldHtml(f, values[f.name])).join('') + '</form>';
+      return '<form class="form-grid" data-nosubmit>' + fields.map((f) => UI.fieldHtml(f, values[f.name])).join('') + '</form>';
     },
 
     bindImageInputs(root) {
@@ -268,10 +271,17 @@
                   const err = schema.beforeSave(data, isNew, rec);
                   if (err) { UI.toast(err, 'error'); return false; }
                 }
+                const done = () => {
+                  UI.toast(schema.singular + ' saved');
+                  if (schema.afterSave) schema.afterSave();
+                  render();
+                };
+                // logins wait for the server, so "saved" is only shown when it really is
+                if (schema.col === 'users') {
+                  return (isNew ? DB.create('users', data) : DB.saveUser(rec.id, data)).then(done, () => false);
+                }
                 if (isNew) DB.insert(schema.col, data); else DB.update(schema.col, rec.id, data);
-                UI.toast(schema.singular + ' saved');
-                if (schema.afterSave) schema.afterSave();
-                render();
+                done();
               },
             },
           ],

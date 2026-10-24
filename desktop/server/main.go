@@ -38,8 +38,9 @@ var webFS embed.FS
 
 // Config is read from jewellery.json next to the executable (created by the installer).
 type Config struct {
-	HttpAddr string `json:"httpAddr"` // 0.0.0.0:8090 = this laptop and other devices on the shop Wi-Fi; 127.0.0.1:8090 = this laptop only
-	DataDir  string `json:"dataDir"`
+	HttpAddr  string `json:"httpAddr"`  // plain HTTP: the app for this laptop (localhost) + the device setup page for others
+	HttpsAddr string `json:"httpsAddr"` // HTTPS for every device: 0.0.0.0:8443 = shop Wi-Fi too; 127.0.0.1:8443 = this laptop only; "off" = no HTTPS
+	DataDir   string `json:"dataDir"`
 }
 
 func exeDir() string {
@@ -60,7 +61,7 @@ func defaultDataDir() string {
 }
 
 func loadConfig() Config {
-	cfg := Config{HttpAddr: "0.0.0.0:8090", DataDir: defaultDataDir()}
+	cfg := Config{HttpAddr: "0.0.0.0:8090", HttpsAddr: "0.0.0.0:8443", DataDir: defaultDataDir()}
 	if raw, err := os.ReadFile(filepath.Join(exeDir(), "jewellery.json")); err == nil {
 		_ = json.Unmarshal(raw, &cfg)
 	}
@@ -69,6 +70,12 @@ func loadConfig() Config {
 	}
 	if env := os.Getenv("JEWELLERY_HTTP"); env != "" {
 		cfg.HttpAddr = env
+	}
+	if env := os.Getenv("JEWELLERY_HTTPS"); env != "" {
+		cfg.HttpsAddr = env
+	}
+	if cfg.HttpsAddr == "" {
+		cfg.HttpsAddr = "0.0.0.0:8443" // older jewellery.json files have no httpsAddr
 	}
 	return cfg
 }
@@ -101,6 +108,8 @@ func newApp(cfg Config) *pocketbase.PocketBase {
 	registerSecurity(app)
 	registerBusinessRules(app)
 	registerAudit(app)
+	registerHardening(app)
+	registerRates(app)
 
 	// Prepare the database before serving: collections, default data, first superuser
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{
@@ -146,7 +155,7 @@ func setupDatabase(app core.App) error {
 		return err
 	}
 	protectAtRest(app)
-	return nil
+	return applyRateLimits(app)
 }
 
 // The PocketBase dashboard (/_/) needs a superuser. One is created on first start with a random
@@ -221,6 +230,8 @@ func main() {
 					cfg.DataDir = os.Args[i+1]
 				case "--http":
 					cfg.HttpAddr = os.Args[i+1]
+				case "--https":
+					cfg.HttpsAddr = os.Args[i+1]
 				}
 			}
 			if err := saveConfig(cfg); err != nil {
@@ -240,9 +251,15 @@ func main() {
 	app.RootCmd.Short = "JewelleryApp database and app server"
 	registerCommands(app)
 
-	// No command given: start the server on the configured address
+	// No command given: start the server on the configured addresses (same as the Windows service)
 	if len(os.Args) == 1 {
-		os.Args = append(os.Args, "serve", "--http", cfg.HttpAddr)
+		if err := app.Bootstrap(); err != nil {
+			log.Fatal(err)
+		}
+		if err := serveApp(app, cfg); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
 	if err := app.Start(); err != nil {

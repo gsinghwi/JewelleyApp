@@ -6,7 +6,7 @@ It is a **browser application**:
 
 - The installer sets up the database and web server on one Windows laptop, as a service that starts with Windows.
 - On that laptop, use `http://localhost:8090`.
-- Other laptops, tablets and phones on the same Wi-Fi use `http://<laptop IP>:8090`, shown in **Settings**. Nothing is installed on them.
+- Other laptops, tablets and phones on the same Wi-Fi use `https://<laptop IP>:8443`, shown in **Settings**, after installing the shop certificate once from `http://<laptop IP>:8090/setup`. Nothing else is installed on them.
 
 | Part | What it is |
 |---|---|
@@ -38,7 +38,7 @@ VERSION=1.0.0 ./build.sh      # -> build/JewelleryApp-Setup-1.0.0.exe
 
 ```
 cd desktop/server
-JEWELLERY_DATA_DIR=./pb_data go run .      # listens on 0.0.0.0:8090
+JEWELLERY_DATA_DIR=./pb_data go run .      # http 0.0.0.0:8090 + https 0.0.0.0:8443
 # open http://localhost:8090 (or http://<this machine's IP>:8090 from another device), sign in with admin / admin123
 ```
 
@@ -51,7 +51,7 @@ JEWELLERY_DATA_DIR=./pb_data go run .      # listens on 0.0.0.0:8090
 | `backup` | Take a backup now (to the configured backup folder) |
 | `restore --file <zip or jwbackup> [--password X]` | Restore a backup, checked before it replaces anything (service must be stopped) |
 | `export-mysql --out <file.sql>` | Export everything as a MySQL 8 script |
-| `config --data-dir <dir> --http <addr>` | Write `jewellery.json` (used by the installer) |
+| `config --data-dir <dir> --http <addr> --https <addr>` | Write `jewellery.json` (used by the installer) |
 | `version` | Print the version |
 
 ## How the data is stored
@@ -60,7 +60,8 @@ Each collection keeps the app record as JSON (`data`), plus indexed `branchId` a
 
 - **Branch isolation:** server-side API rules make sure branch users can only read and write their own branch's records.
 - **Document numbers:** invoices, receipts, pawn tickets, purchases, transfers, stock tags and customer codes are assigned by the server, per branch and financial year. No duplicates even with several counters billing at once.
-- **Network:** the server listens on all network cards (`0.0.0.0:8090`; set `httpAddr` in `jewellery.json` to `127.0.0.1:8090` for this laptop only). The PocketBase admin UI and superuser APIs only answer requests from the laptop itself.
+- **Network:** HTTPS on `0.0.0.0:8443` with the shop's own certificate authority (`tls.go`; the server certificate covers every address of the laptop and is re-issued when the IP changes). Plain HTTP on `:8090` serves the app to the laptop itself (`localhost`) and only the device setup page to others. The PocketBase admin UI and superuser APIs only answer requests from the laptop itself.
+- **Browser hardening:** Content-Security-Policy (no inline scripts; only this server and Razorpay), CORS limited to the app's own addresses, sign-in kept per browser tab with an idle sign-out, request rate limits, 1 MB per record.
 - **Secrets:** Razorpay and WhatsApp keys are kept in a superuser-only collection, encrypted with a key file outside the database folder (so never in a backup), and used only by the server.
 - **Backups:** encrypted with the Admin's backup password (AES-256-GCM, scrypt) once it is set. Restore validates a backup before swapping it in.
 - **Activity log:** written by the server (`audit.go`); staff cannot create, edit or delete entries.

@@ -15,6 +15,7 @@ Sign in as `admin` and work through the **checklist** in order. Most of it is un
 | 5 | Settings > Daily backup | Backup folder (USB, second drive or cloud-synced folder), time, how many to keep. Set a **backup password** (write it down, keep it away from the laptop), then click **Back up now** once. | Yes |
 | 6 | Branches & Access | Rename "Head Office" to your shop's name and code, then add sub-branches if you have them | Yes |
 | 7 | Branches & Access > Users | One login per staff member (Admin / Manager / Sales), each in a branch | Yes |
+| 7a | Each other laptop / tablet / phone | Open `http://<laptop IP>:8090/setup` once and install the shop certificate (Settings > Open on other laptops / tablets shows the address) | If other devices are used |
 | 8 | Today's Rates | Click **Refresh live rates** (IBJA) or type today's rates, then **Save rates** | Yes, every day |
 | 9 | Master Data > Items | Check making charges, wastage %, HSN and re-order levels for the items you sell. Add your own items. | Yes |
 | 10 | Master Data > Stone types | Set your stone rates per carat / piece | If you sell studded items |

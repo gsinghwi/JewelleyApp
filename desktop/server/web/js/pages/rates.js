@@ -23,6 +23,7 @@
   }
 
   let lastLive = null; // breakdown of the most recent live refresh, shown under the form
+  let pending = null; // fetched live rates waiting for review (not saved yet)
 
   function liveDetail(r) {
     if (!r) return '';
@@ -39,6 +40,7 @@
         ],
         rows: r.lines,
       }) : '') +
+      (r.alerts && r.alerts.length ? '<div class="banner warn"><b>Check before saving:</b><ul>' + r.alerts.map((a) => '<li>' + esc(a) + '</li>').join('') + '</ul></div>' : '') +
       (r.warnings && r.warnings.length ? '<p class="muted small">Not updated (kept previous rate): ' + esc(r.warnings.join('; ')) + '</p>' : '') +
       (r.basis === 'IBJA'
         ? '<p class="muted small">IBJA benchmark rates include import duty and exclude GST (GST is added on the bill). Purities IBJA does not publish are worked out from the 999 rate by purity. Use the premium in Live rate settings to add your shop\'s margin over IBJA.</p></div>'
@@ -83,13 +85,13 @@
       const purities = DB.all('purities').filter((p) => p.metalId !== 'NONE');
       const history = DB.rateHistory();
       const latest = DB.latestRate();
-      const cur = latest.values || {};
+      const cur = pending ? pending.values : latest.values || {};
       let chartKey = 'G22K';
 
       el.innerHTML =
         '<div class="grid-2">' +
         '<section class="card"><div class="card-head"><h3>' + (canEdit ? 'Update rates' : 'Current rates') + ' <small>₹ per gram</small></h3></div>' +
-        '<form class="rate-form" onsubmit="return false">' +
+        '<form class="rate-form" data-nosubmit>' +
         '<div class="rate-inputs">' + purities.map((p) =>
           '<label class="rate-input ' + p.metalId.toLowerCase() + '"><span>' + esc(p.name) + '</span>' +
           '<input type="number" step="any" min="0" name="' + p.id + '" value="' + esc(cur[p.id] || '') + '"' + (canEdit ? '' : ' readonly') + '></label>').join('') + '</div>' +
@@ -100,6 +102,8 @@
           '<div class="actions-row">' +
           '<button type="button" class="btn" data-derive>Auto-fill from 24K &amp; Fine Silver</button>' +
           '<span class="spacer"></span><button type="button" class="btn primary" data-save>Save rates</button></div>' +
+          (pending ? '<div class="banner warn">Live rates from <b>' + esc(pending.source) + '</b> are filled in but <b>not saved yet</b>. Compare them with your market rate, then click <b>Save rates</b>.' +
+            (pending.alerts.length ? ' <b>' + pending.alerts.length + ' check(s) need attention</b>, see below.' : '') + '</div>' : '') +
           '<p class="muted small">Saved rates are used immediately on new bills. You can also type rates by hand and Save.</p>' : '') +
         '<p class="muted small">Last updated: ' + (latest.at ? U.fmtDateTime(latest.at) + ' by ' + esc(latest.by || '-') + ' (' + esc(latest.source || '') + ')' : 'never') + '</p>' +
         '</form></section>' +
@@ -137,9 +141,10 @@
         btn.disabled = true;
         btn.textContent = 'Checking the internet...';
         try {
-          const r = await LiveRates.refresh({ force: true });
+          const r = await LiveRates.refresh();
           lastLive = Object.assign(r, { fetchedAt: new Date().toISOString() });
-          UI.toast('Live rates applied: 24K ' + U.inr(r.values.G24K, { whole: true }) + ', 22K ' + U.inr(r.values.G22K, { whole: true }) + ' per gram');
+          pending = r;
+          UI.toast(r.alerts.length ? 'Live rates loaded with ' + r.alerts.length + ' warning(s). Check them before saving.' : 'Live rates loaded. Check them, then click Save rates.', r.alerts.length ? 'error' : undefined);
           App.route();
         } catch (err) {
           UI.toast('Could not get live rates: ' + err.message + ' You can still enter rates by hand.', 'error');
@@ -147,7 +152,7 @@
           btn.innerHTML = '&#8635; Refresh live rates';
         }
       });
-      el.querySelector('[data-save]').addEventListener('click', () => {
+      el.querySelector('[data-save]').addEventListener('click', async () => {
         const values = {};
         let missing = false;
         purities.forEach((p) => {
@@ -155,7 +160,16 @@
           if (v > 0) values[p.id] = v; else if (p.showRate) missing = true;
         });
         if (missing) { UI.toast('Please enter all highlighted rates', 'error'); return; }
-        DB.insert('rates', { at: new Date().toISOString(), values, source: 'Manual', by: Auth.user.username });
+        // catch typing mistakes and bad feeds: unrealistic rates are refused, big moves need a confirmation
+        const chk = LiveRates.check(values);
+        if (chk.rejected.length) { UI.toast(chk.warnings.filter((w) => /not a realistic/.test(w)).join('. '), 'error'); return; }
+        const fromLive = pending && purities.every((p) => !values[p.id] || values[p.id] === pending.values[p.id]);
+        const notes = chk.warnings.concat(fromLive ? pending.alerts.filter((a) => !/changed .*% since/.test(a)) : []);
+        if (notes.length && !(await UI.confirm('Please check before saving:\n\n- ' + notes.join('\n- ') + '\n\nSave these rates for all new bills?', 'Yes, rates are correct'))) return;
+        try {
+          await DB.create('rates', { at: new Date().toISOString(), values, source: fromLive ? 'Live: ' + pending.source + ' (reviewed)' : 'Manual', by: Auth.user.username, confirmedLargeChange: chk.maxPct > 25 });
+        } catch (e) { return; }
+        pending = null;
         UI.toast('Rates saved and applied to new bills');
         App.route();
       });

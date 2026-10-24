@@ -122,7 +122,7 @@ func registerIntegrations(app core.App) {
 				"whatsapp": map[string]any{"phoneNumberId": str(wa, "phoneNumberId", ""), "apiVersion": str(wa, "apiVersion", "v21.0"),
 					"tokenSet": str(wa, "token", "") != "", "tokenHint": mask(str(wa, "token", ""))},
 				"razorpay": map[string]any{"keyId": key, "secretSet": str(rp, "keySecret", "") != "", "secretHint": mask(str(rp, "keySecret", "")),
-					"mode": map[bool]string{true: "test", false: "live"}[strings.HasPrefix(key, "rzp_test_")]},
+					"mode": razorpayMode(key)},
 			})
 		})
 
@@ -230,7 +230,7 @@ func registerIntegrations(app core.App) {
 			rp := getSecret(re.App, "razorpay")
 			key := str(rp, "keyId", "")
 			return re.JSON(http.StatusOK, map[string]any{"enabled": key != "" && str(rp, "keySecret", "") != "", "keyId": key,
-				"mode": map[bool]string{true: "test", false: "live"}[strings.HasPrefix(key, "rzp_test_")]})
+				"mode": razorpayMode(key)})
 		})
 
 		g.POST("/razorpay/order", func(re *core.RequestEvent) error {
@@ -397,3 +397,14 @@ func recordGatewayPayment(re *core.RequestEvent, keyId, paymentId, orderId strin
 }
 
 var gatewayRecordMu sync.Mutex
+
+// "test", "live", or "" when no key is saved
+func razorpayMode(key string) string {
+	switch {
+	case key == "":
+		return ""
+	case strings.HasPrefix(key, "rzp_test_"):
+		return "test"
+	}
+	return "live"
+}

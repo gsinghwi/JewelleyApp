@@ -106,7 +106,7 @@
     // Full-screen form shown until a new password is set (first login, or after an Admin reset)
     renderChangePassword(root, onDone) {
       root.innerHTML =
-        '<div class="login"><section class="login-form-wrap" style="grid-column:1/-1"><form class="login-form" onsubmit="return false">' +
+        '<div class="login"><section class="login-form-wrap" style="grid-column:1/-1"><form class="login-form" data-nosubmit>' +
         '<h2>Set your password</h2><p class="muted">Hello ' + esc(this.user.name) + '. For security, choose a new password before you start. ' +
         'Use at least 8 characters, and do not reuse the default password.</p>' +
         '<div class="field"><label>Current password</label><input type="password" name="current" autocomplete="current-password" required></div>' +

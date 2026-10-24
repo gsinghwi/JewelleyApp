@@ -180,7 +180,7 @@
       view.innerHTML = '<section class="card"><h3>This screen could not be shown</h3>' +
         '<p class="muted">Something in the data could not be read: <code>' + esc(e.message || String(e)) + '</code></p>' +
         '<p class="muted small">Other screens still work. Tell the head office Admin which screen this was; the activity log in Settings shows recent changes.</p>' +
-        '<button class="btn" onclick="location.reload()">Reload</button></section>';
+        '<button class="btn" data-reload>Reload</button></section>';
     }
   }
 
@@ -210,7 +210,7 @@
       await DB.api('health');
     } catch (e) {
       root.innerHTML = '<div class="boot"><div class="boot-box"><h2>Cannot reach the database</h2><p class="muted">The server laptop may be switched off or asleep, the JewelleryApp Database service may be stopped, or this device is not on the shop Wi-Fi.</p>' +
-        '<p class="muted small">On the server laptop: open Services and start "JewelleryApp Database", or restart the laptop. On another device: check it is on the same Wi-Fi as the server laptop.</p><button class="btn primary" onclick="location.reload()">Try again</button></div></div>';
+        '<p class="muted small">On the server laptop: open Services and start "JewelleryApp Database", or restart the laptop. On another device: check it is on the same Wi-Fi as the server laptop.</p><button class="btn primary" data-reload>Try again</button></div></div>';
       return;
     }
     applyTheme();
@@ -236,6 +236,23 @@
       window.scrollTo(0, y);
     }, 400);
   }
+
+  // no inline event handlers (the Content-Security-Policy blocks them)
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-reload]')) location.reload(); });
+
+  // ---- sign out after a period without use (shared counter computers) ----
+  let lastActivity = Date.now();
+  ['mousedown', 'keydown', 'touchstart', 'wheel'].forEach((ev) => document.addEventListener(ev, () => { lastActivity = Date.now(); }, { passive: true, capture: true }));
+  setInterval(() => {
+    const mins = Number(DB.settings.autoLogoutMins == null ? 30 : DB.settings.autoLogoutMins);
+    if (!Auth.user || !(mins > 0) || Date.now() - lastActivity < mins * 60000) return;
+    LiveRates.stopAuto();
+    DB.flush().finally(() => {
+      Auth.logout(); DB.clear(); Branch.clearView();
+      history.replaceState(null, '', location.pathname);
+      start().then(() => UI.toast('Signed out after ' + mins + ' minutes without use'));
+    });
+  }, 30000);
 
   global.App = {
     start, route, applyTheme,

@@ -166,7 +166,11 @@ func ensureSchema(app core.App) error {
 		}
 		setIdField(c)
 		if c.Fields.GetByName("data") == nil {
-			c.Fields.Add(&core.JSONField{Name: "data", MaxSize: 8 << 20})
+			c.Fields.Add(&core.JSONField{Name: "data"})
+		}
+		// 1 MB per record is far more than any real bill / purchase needs; stops junk records filling the disk
+		if f, ok := c.Fields.GetByName("data").(*core.JSONField); ok {
+			f.MaxSize = 1 << 20
 		}
 		if s.Owned && c.Fields.GetByName("branchId") == nil {
 			c.Fields.Add(&core.TextField{Name: "branchId", Max: 64})
@@ -251,7 +255,7 @@ func ensureSystemCollections(app core.App) error {
 		update *string
 	}
 	for _, s := range []sys{
-		{"appSettings", ptr(""), ptr(ruleMaster + ruleAdmin)},
+		{"appSettings", ptr(ruleAuth), ptr(ruleMaster + ruleAdmin)}, // signed-in users only; the login page uses /api/jw/branding
 		{"secrets", nil, nil},
 		{"counters", nil, nil},
 	} {
@@ -264,8 +268,13 @@ func ensureSystemCollections(app core.App) error {
 			if c.Fields.GetByName("value") == nil {
 				c.Fields.Add(&core.NumberField{Name: "value", OnlyInt: true})
 			}
-		} else if c.Fields.GetByName("data") == nil {
-			c.Fields.Add(&core.JSONField{Name: "data", MaxSize: 8 << 20})
+		} else {
+			if c.Fields.GetByName("data") == nil {
+				c.Fields.Add(&core.JSONField{Name: "data"})
+			}
+			if f, ok := c.Fields.GetByName("data").(*core.JSONField); ok {
+				f.MaxSize = 3 << 20 // settings hold the logo and login picture (up to 600 KB each)
+			}
 		}
 		addAutodate(c)
 		c.ListRule = s.list

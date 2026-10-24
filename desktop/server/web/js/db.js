@@ -13,7 +13,29 @@
 (function (global) {
   'use strict';
 
-  const pb = new PocketBase(location.origin);
+  // The sign-in is kept only for this browser tab and ends when the browser is closed
+  // (sessionStorage), so the next person at a shared counter starts at the login page.
+  const AUTH_KEY = 'jewelleryapp.auth';
+  const BaseAuthStore = Object.getPrototypeOf(new PocketBase(location.origin).authStore.constructor);
+  class SessionAuthStore extends BaseAuthStore {
+    constructor() {
+      super();
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null');
+        if (saved && saved.token) super.save(saved.token, saved.record);
+      } catch (e) { /* start signed out */ }
+    }
+    save(token, record) {
+      super.save(token, record);
+      try { sessionStorage.setItem(AUTH_KEY, JSON.stringify({ token, record })); } catch (e) { /* tab only */ }
+    }
+    clear() {
+      super.clear();
+      try { sessionStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
+    }
+  }
+  try { localStorage.removeItem('pocketbase_auth'); } catch (e) { /* sign-ins kept by older versions */ }
+  const pb = new PocketBase(location.origin, new SessionAuthStore());
   pb.autoCancellation(false);
 
   const COLLECTIONS = ['branches', 'currencies', 'categories', 'metals', 'purities', 'hsn', 'stoneTypes', 'paymentModes', 'customerGroups',
@@ -100,10 +122,15 @@
     loaded: false,
 
     // Branding for the login page (readable without signing in)
+    // before sign in: only the branding the login page shows; after sign in: all settings
     async loadPublicSettings() {
       try {
-        const r = await pb.collection('appSettings').getOne('main');
-        this.data.settings = Object.assign({}, r.data || {});
+        if (pb.authStore.isValid) {
+          const r = await pb.collection('appSettings').getOne('main');
+          this.data.settings = Object.assign({}, r.data || {});
+        } else {
+          this.data.settings = Object.assign({}, await pb.send('/api/jw/branding', {}));
+        }
       } catch (e) {
         this.data.settings = this.data.settings || {};
       }
@@ -294,6 +321,14 @@
       this.audit('update', col, id);
       this.persist();
       return rec;
+    },
+
+    // Change a login and wait for the server (password resets, roles); rejects if it was refused
+    async saveUser(id, patch) {
+      const rec = this.raw('users').find((x) => x.id === id);
+      const payload = this.staffPayload(Object.assign({}, rec, patch), false);
+      const saved = await this.enqueue(() => pb.collection('staff').update(id, payload), 'user');
+      return this.ingest('users', saved);
     },
 
     pushUpdate(col, rec) {

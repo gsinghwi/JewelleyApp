@@ -30,6 +30,7 @@ const settings = Object.assign({}, ctx.Seed.settings, {
   backupTime: '21:00',
   backupKeep: 30,
   currency: 'INR',
+  autoLogoutMins: 30, // sign out after 30 minutes without use
 });
 // keys and tokens are kept in the server's secrets (Settings > Integrations), never in the settings
 ['showDemoHint', 'waToken', 'waPhoneNumberId', 'waApiVersion', 'pgKeyId'].forEach((k) => delete settings[k]);

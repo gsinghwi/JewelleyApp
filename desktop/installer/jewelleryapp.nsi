@@ -3,9 +3,10 @@
 ;
 ; Installs the programs in Program Files, keeps the data in a folder you choose
 ; (default C:\ProgramData\JewelleryApp), registers the "JewelleryApp Database" Windows service
-; (starts automatically with Windows, stopped cleanly at shutdown), opens port 8090 in the Windows
-; firewall for private networks (so other laptops on the shop Wi-Fi can use the app in their
-; browser) and adds shortcuts.
+; (starts automatically with Windows, stopped cleanly at shutdown), opens ports 8090/8443 in the
+; Windows firewall for private networks (so other devices on the shop Wi-Fi can use the app in
+; their browser), trusts the shop's own HTTPS certificate on this laptop, limits the data folder to
+; SYSTEM and administrators, and adds shortcuts.
 ; Uninstalling removes the programs and the service but KEEPS the data and backups.
 
 Unicode true
@@ -44,7 +45,7 @@ Var DataDir
 !define MUI_UNICON "jewelleryapp.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install ${APP} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "This installs the JewelleryApp billing, stock, CRM and pawn software and its database on this laptop.$\r$\n$\r$\nJewelleryApp is used in a web browser (Chrome or Edge): on this laptop at http://localhost:8090, and on other laptops on the same Wi-Fi at http://<this laptop's IP>:8090.$\r$\n$\r$\nThe database starts by itself with the laptop and stops safely at shutdown. A backup is taken every day.$\r$\n$\r$\nFirst sign in: username admin, password admin123 (you will be asked to change it)."
+!define MUI_WELCOMEPAGE_TEXT "This installs the JewelleryApp billing, stock, CRM and pawn software and its database on this laptop.$\r$\n$\r$\nJewelleryApp is used in a web browser (Chrome or Edge): on this laptop at http://localhost:8090, and on other laptops on the same Wi-Fi at https://<this laptop's IP>:8443 (Settings in the app shows the address).$\r$\n$\r$\nThe database starts by itself with the laptop and stops safely at shutdown. A backup is taken every day.$\r$\n$\r$\nFirst sign in: username admin, password admin123 (you will be asked to change it)."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 
@@ -100,12 +101,17 @@ Section "JewelleryApp" SecMain
 
   CreateDirectory "$DataDir"
   CreateDirectory "$DataDir\backups"
-  ; jewellery.json: data folder and address (all network cards: this laptop and the shop Wi-Fi)
-  nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" config --data-dir "$DataDir\pb_data" --http 0.0.0.0:8090'
+  ; jewellery.json: data folder and addresses
+  ;   https 8443: the app for every device (shop certificate); http 8090: this laptop + device setup page
+  nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" config --data-dir "$DataDir\pb_data" --http 0.0.0.0:8090 --https 0.0.0.0:8443'
 
-  ; let other devices on PRIVATE (home / work) networks reach port 8090; public Wi-Fi stays blocked
+  ; only Windows (SYSTEM) and administrators may read the database, keys and backups folder
+  ; (SIDs instead of names so it works in every Windows language)
+  nsExec::ExecToLog 'icacls "$DataDir" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F /T /C /Q'
+
+  ; let other devices on PRIVATE (home / work) networks reach the app; public Wi-Fi stays blocked
   nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="JewelleryApp"'
-  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="JewelleryApp" description="JewelleryApp in the browser on the shop network" dir=in action=allow protocol=TCP localport=8090 profile=private,domain'
+  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="JewelleryApp" description="JewelleryApp in the browser on the shop network" dir=in action=allow protocol=TCP localport=8090,8443 profile=private,domain'
 
   DetailPrint "Registering the JewelleryApp Database service..."
   nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" service install'
@@ -115,6 +121,17 @@ Section "JewelleryApp" SecMain
   ${If} $0 != 0
     MessageBox MB_ICONEXCLAMATION "The database service did not start. Restart the laptop, or see $DataDir\logs\server.log."
   ${EndIf}
+
+  ; trust the shop certificate on this laptop (created by the database on its first start)
+  StrCpy $1 0
+  wait_ca:
+    IfFileExists "$DataDir\tls\ca.crt" ca_ready
+    IntOp $1 $1 + 1
+    IntCmp $1 30 ca_ready
+    Sleep 1000
+    Goto wait_ca
+  ca_ready:
+  nsExec::ExecToLog 'certutil -addstore -f Root "$DataDir\tls\ca.crt"'
 
   ; shortcuts
   CreateShortcut "$DESKTOP\JewelleryApp.lnk" "$INSTDIR\JewelleryApp.exe" "" "$INSTDIR\jewelleryapp.ico"
@@ -147,6 +164,7 @@ Section "Uninstall"
   Sleep 2000
   nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" service uninstall'
   nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="JewelleryApp"'
+  nsExec::ExecToLog `powershell -NoProfile -Command "Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $$_.Subject -like '*JewelleryApp Shop CA*' } | Remove-Item"`
 
   Delete "$DESKTOP\JewelleryApp.lnk"
   RMDir /r "$SMPROGRAMS\${APP}"

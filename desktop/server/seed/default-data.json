@@ -43,7 +43,8 @@
   "backupDir": "C:\\ProgramData\\JewelleryApp\\backups",
   "backupTime": "21:00",
   "backupKeep": 30,
-  "currency": "INR"
+  "currency": "INR",
+  "autoLogoutMins": 30
  },
  "collections": {
   "branches": [

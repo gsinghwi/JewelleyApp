@@ -29,6 +29,8 @@
     { name: 'tagPrefix', label: 'Stock tag prefix', required: true },
     { name: 'hallmarkCharge', label: 'Default hallmark charge per piece (₹)', type: 'number', min: 0 },
     { name: 'terms', label: 'Invoice terms & conditions', type: 'textarea', rows: 5, full: true },
+    { name: 'autoLogoutMins', label: 'Sign out after this many minutes without use', type: 'number', min: 0, default: 30,
+      help: '0 = never. 30 is recommended on counter computers that several people use. Closing the browser always signs out.' },
   ];
 
   const paymentFields = [
@@ -160,13 +162,18 @@
       // ---- Network address for other devices ----
       DB.api('network').then((n) => {
         const urls = n.urls || [];
+        const list = (arr) => '<ul class="net-urls">' + arr.map((u) => '<li><a href="' + esc(u) + '" target="_blank" rel="noopener"><b>' + esc(u) + '</b></a></li>').join('') + '</ul>';
         el.querySelector('.net-box').innerHTML = !n.lanEnabled
-          ? '<p>Only this laptop can open JewelleryApp (address <code>' + esc(n.listen) + '</code>). To allow other devices on the shop Wi-Fi, see the Installation guide.</p>'
-          : '<p>Any laptop, tablet or phone on the <b>same Wi-Fi</b> can open JewelleryApp in Chrome or Edge at:</p>' +
-            (urls.length ? '<ul class="net-urls">' + urls.map((u) => '<li><a href="' + esc(u) + '" target="_blank"><b>' + esc(u) + '</b></a></li>').join('') + '</ul>'
-              : '<p class="muted">This laptop is not connected to a network right now.</p>') +
-            (n.byName ? '<p class="muted small">Also usually works: <code>' + esc(n.byName) + '</code> &middot; on this laptop: <code>' + esc(n.local) + '</code></p>' : '') +
-            '<p class="muted small">Each person signs in with their own username. Ask your router admin to give this laptop a fixed (reserved) IP so the address does not change, and set the Wi-Fi to <b>Private</b> in Windows network settings.</p>';
+          ? '<p>Only this laptop can open JewelleryApp. To allow other devices on the shop Wi-Fi, see the Installation guide.</p>'
+          : !urls.length ? '<p class="muted">This laptop is not connected to a network right now.</p>'
+          : '<p>Any laptop, tablet or phone on the <b>same Wi-Fi</b> can open JewelleryApp in Chrome, Edge or Safari at:</p>' + list(urls) +
+            (n.https
+              ? '<p><b>First time on each device:</b> open the setup page below and install the shop certificate (2 minutes, once per device). After that the app opens without warnings, passwords travel encrypted and the camera can scan QR codes.</p>' +
+                list(n.setup || []) +
+                '<p class="muted small">Certificate: <code>' + esc(n.caName) + '</code><br>Fingerprint (SHA-256): <code>' + esc(n.fingerprint) + '</code><br>The setup page on the other device must show this same fingerprint.</p>'
+              : '<p class="banner warn">HTTPS is switched off: passwords travel unencrypted on the Wi-Fi.</p>') +
+            '<p class="muted small">On this laptop: <code>' + esc(n.local) + '</code>' + (n.byName ? ' &middot; by name: <code>' + esc(n.byName) + '</code>' : '') +
+            '. Ask your router admin to give this laptop a fixed (reserved) IP so the address does not change, and set the Wi-Fi to <b>Private</b> in Windows network settings.</p>';
       }).catch((ex) => { el.querySelector('.net-box').innerHTML = '<p class="muted">' + esc(DB.errorText(ex)) + '</p>'; });
 
       // ---- Backups ----

@@ -93,6 +93,11 @@ func registerNetwork(app core.App, cfg Config) {
 					return re.ForbiddenError("Only available on the server laptop itself.", nil)
 				}
 			}
+			// a disabled login is refused straight away, even with a token issued before it was disabled
+			if re.Auth != nil && re.Auth.Collection().Name == staffCollection && !re.Auth.GetBool("active") &&
+				p != "/api/jw/health" && !strings.HasPrefix(p, "/api/collections/"+staffCollection+"/auth-with-password") {
+				return re.ForbiddenError("This login is disabled. Ask the head office Admin.", nil)
+			}
 			// a user who must change their password can do nothing else until they have
 			if re.Auth != nil && re.Auth.Collection().Name == staffCollection && re.Auth.GetBool("mustChangePassword") && !requestAllowedBeforePasswordChange(re) {
 				return re.ForbiddenError("Change your password first.", nil)
@@ -101,20 +106,43 @@ func registerNetwork(app core.App, cfg Config) {
 		})
 
 		e.Router.GET("/api/jw/network", func(re *core.RequestEvent) error {
-			urls, host := lanURLs(cfg.HttpAddr)
-			port := "8090"
-			if _, p, err := net.SplitHostPort(cfg.HttpAddr); err == nil {
-				port = p
+			httpPort := portOf(cfg.HttpAddr, "8090")
+			out := map[string]any{"local": "http://localhost:" + httpPort}
+			if shopCert == nil { // HTTPS switched off
+				urls, host := lanURLs(cfg.HttpAddr)
+				out["https"], out["lanEnabled"], out["listen"], out["urls"] = false, lanEnabled(cfg.HttpAddr), cfg.HttpAddr, urls
+				if host != "" {
+					out["byName"] = "http://" + strings.ToLower(host) + ":" + httpPort
+				}
+				return re.JSON(http.StatusOK, out)
 			}
-			byName := ""
+			urls, host := lanURLs(cfg.HttpsAddr)
+			var setup []string
+			for i, u := range urls { // u is http://<ip>:<https port>
+				ip := strings.TrimSuffix(strings.TrimPrefix(u, "http://"), ":"+portOf(cfg.HttpsAddr, "8443"))
+				urls[i] = "https://" + ip + ":" + portOf(cfg.HttpsAddr, "8443")
+				setup = append(setup, "http://"+ip+":"+httpPort+"/setup")
+			}
+			out["https"], out["lanEnabled"], out["listen"], out["urls"], out["setup"] = true, lanEnabled(cfg.HttpsAddr), cfg.HttpsAddr, urls, setup
+			out["fingerprint"], out["caName"] = shopCert.Fingerprint(), shopCert.CAName()
 			if host != "" {
-				byName = "http://" + strings.ToLower(host) + ":" + port
+				out["byName"] = "https://" + strings.ToLower(host) + ":" + portOf(cfg.HttpsAddr, "8443")
 			}
-			return re.JSON(http.StatusOK, map[string]any{
-				"lanEnabled": lanEnabled(cfg.HttpAddr), "listen": cfg.HttpAddr,
-				"urls": urls, "byName": byName, "local": "http://localhost:" + port,
-			})
+			return re.JSON(http.StatusOK, out)
 		}).Bind(apis.RequireAuth(staffCollection))
 		return e.Next()
 	})
+}
+
+// allowedOrigins: only this app's own addresses may call the API from a browser (no other websites)
+func allowedOrigins(cfg Config) []string {
+	hosts := currentHosts()
+	var out []string
+	for _, h := range hosts {
+		if strings.Contains(h, ":") {
+			h = "[" + h + "]"
+		}
+		out = append(out, "http://"+h+":"+portOf(cfg.HttpAddr, "8090"), "https://"+h+":"+portOf(cfg.HttpsAddr, "8443"))
+	}
+	return out
 }

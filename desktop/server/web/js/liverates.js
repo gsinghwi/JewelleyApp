@@ -16,6 +16,11 @@
  *
  * Provider CUSTOM: any URL returning JSON with rates per gram keyed by purity code, e.g.
  *   {"G24K": 12850, "G22K": 11780, "S999": 165}   (also accepted under "rates" or "data")
+ *
+ * Safety: the feeds are unofficial, so fetched rates are never applied blindly. "Refresh live rates"
+ * fills the form for review; each rate is compared with the last saved one and, for IBJA, with the
+ * international price. Auto-refresh only saves when every change is small (3% or less) and both
+ * sources agree; otherwise it asks for a review. The server also refuses unrealistic rates.
  */
 (function (global) {
   'use strict';
@@ -32,17 +37,12 @@
   const IBJA_GOLD = { lblGold999: 'G24K', lblGold916: 'G22K', lblGold750: 'G18K', lblGold585: 'G14K' };
   const RANGE = { GOLD: [2000, 80000], SILVER: [20, 2000], PLATINUM: [1000, 40000] };
 
-  async function getJSON(url, ms) {
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = setTimeout(() => ctrl && ctrl.abort(), ms || 12000);
+  // Rate feeds are fetched by the server (only known rate websites, never the shop network)
+  async function getJSON(url) {
     try {
-      const res = await fetch(url, { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
-      if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + new URL(url).host);
-      return await res.json();
+      return await DB.api('rates/fetch?url=' + encodeURIComponent(url));
     } catch (e) {
-      throw new Error(e.name === 'AbortError' ? 'Timed out reaching ' + new URL(url).host : e.message);
-    } finally {
-      clearTimeout(timer);
+      throw new Error(DB.errorText(e));
     }
   }
 
@@ -186,7 +186,32 @@
       return { values, source: 'Custom feed ' + new URL(url).host, lines: [] };
     },
 
-    /* Fetch and, unless preview, save as a new rate entry. Metals the source did not return keep their last rate. */
+    /* Check rates before they are used: out-of-range values are dropped, big moves are flagged */
+    check(values, opts) {
+      const prev = DB.currentRates();
+      const limit = (opts && opts.limitPct) || 3;
+      const warnings = [], rejected = [];
+      let maxPct = 0;
+      DB.all('purities').forEach((p) => {
+        const v = +values[p.id];
+        if (!(v > 0)) return;
+        const r = RANGE[p.metalId];
+        if (r && (v < r[0] * Math.max(p.fineness, 300) / 1000 || v > r[1])) {
+          rejected.push(p.id);
+          warnings.push(p.name + ': ' + U.inr(v) + ' is not a realistic rate and was not used');
+          return;
+        }
+        const old = +prev[p.id];
+        if (old > 0) {
+          const pct = Math.abs(v - old) / old * 100;
+          maxPct = Math.max(maxPct, pct);
+          if (pct > limit) warnings.push(p.name + ' changed ' + U.num(pct, 1) + '% since the last saved rate (' + U.inr(old, { whole: true }) + ' → ' + U.inr(v, { whole: true }) + ')');
+        }
+      });
+      return { warnings, rejected, maxPct };
+    },
+
+    /* Fetch the rates. Nothing is saved unless opts.autoSave and every check passes. */
     async refresh(opts) {
       opts = opts || {};
       const cfg = LiveRates.settings();
@@ -207,17 +232,34 @@
         const ind = LiveRates.toIndian(sp.perOz, cfg);
         result = { values: ind.values, lines: ind.lines, source: sp.source, spotAt: sp.at, usdInr: sp.usdInr, warnings: sp.warnings || [] };
       }
+      const notices = result.warnings || [];
+      // second opinion: an unofficial IBJA feed should agree with the international price
+      const alerts = [];
+      if (result.basis === 'IBJA' && result.values.G24K) {
+        try {
+          const ind = LiveRates.toIndian((await LiveRates.spot()).perOz, cfg);
+          if (ind.values.G24K) {
+            const diff = Math.abs(result.values.G24K - ind.values.G24K) / ind.values.G24K * 100;
+            if (diff > 5) alerts.push('IBJA 24K (' + U.inr(result.values.G24K, { whole: true }) + ') differs ' + U.num(diff, 1) + '% from the international price (' + U.inr(ind.values.G24K, { whole: true }) + '). Check ibjarates.com before saving.');
+          }
+        } catch (e) { /* second source unavailable: rely on the other checks */ }
+      }
+      const chk = LiveRates.check(result.values);
+      chk.rejected.forEach((k) => { delete result.values[k]; });
+      alerts.push(...chk.warnings);
       const prev = DB.currentRates();
       const values = Object.assign({}, prev, result.values);
       const changed = Object.keys(values).some((k) => values[k] !== prev[k]);
-      if (!opts.preview && (changed || opts.force)) {
+      let saved = false;
+      if (opts.autoSave && changed && !alerts.length && Object.keys(result.values).length) {
         DB.insert('rates', {
           at: new Date().toISOString(), values, source: 'Live: ' + result.source,
           by: Auth.user ? Auth.user.username : 'auto',
           detail: { spotAt: result.spotAt || '', usdInr: result.usdInr || '', duty: cfg.duty, premiumPct: cfg.premiumPct, updated: Object.keys(result.values) },
         });
+        saved = true;
       }
-      return Object.assign(result, { values, changed });
+      return Object.assign(result, { values, fetched: Object.keys(result.values), changed, saved, alerts, warnings: notices });
     },
 
     // While the app is open, refresh automatically every N minutes (head office Admin/Manager only)
@@ -230,8 +272,12 @@
         const last = DB.latestRate();
         if (last.at && Date.now() - new Date(last.at).getTime() < mins * 60000 * 0.9) return;
         try {
-          const r = await LiveRates.refresh();
-          if (r.changed) { UI.toast('Live rates updated: 24K ' + U.inr(r.values.G24K, { whole: true }) + '/g'); App.updateTicker(); }
+          const r = await LiveRates.refresh({ autoSave: true });
+          if (r.saved) { UI.toast('Live rates updated: 24K ' + U.inr(r.values.G24K, { whole: true }) + '/g'); App.updateTicker(); }
+          else if (r.changed && r.alerts.length && !LiveRates.alerted) {
+            LiveRates.alerted = true; // once per session
+            UI.toast('Live rates moved a lot and were NOT applied. Open Today\'s Rates to review them.', 'error');
+          }
         } catch (e) { /* stay quiet; manual refresh shows errors */ }
       };
       tick();

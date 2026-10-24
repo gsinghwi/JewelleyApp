@@ -38,7 +38,11 @@ Only head office adds stock. It sends stock to branches with **Stock > Transfer 
 - Admin users must belong to the head office branch.
 - Everyone can change their own password from the name menu at the top right.
 
-Every sign in lasts 12 hours. Then the app asks for the password again.
+**When a sign-in ends:**
+
+- when the browser (or tab) is closed;
+- after **30 minutes without use**, to protect shared counter computers. Change this in **Settings > Billing & rates > Sign out after this many minutes without use**; 0 = never;
+- in any case after 12 hours.
 
 **Wrong passwords:**
 - After 5 wrong passwords for a username from the same device, that username is locked on that device for 15 minutes.
@@ -85,14 +89,26 @@ The laptop needs internet for online payments. **Test gateway (simulated)** lets
 
 ## Live gold and silver rates
 
-**Today's Rates > Refresh live rates** fetches IBJA rates, with an international price plus import duty as a fallback. **Live rate settings** controls:
+**Today's Rates > Refresh live rates** fetches the IBJA rates, with an international price plus import duty as a fallback. The rate websites are unofficial, so fetched rates are **never applied without review**:
+
+1. The rates are **filled into the form, not saved**. A yellow note says so.
+2. The app compares them with the last saved rates, and the IBJA rate with the international price. Anything unusual is listed under **Check before saving**, for example "24K changed 6% since the last saved rate".
+3. Compare with your market (or ibjarates.com), correct any number, then click **Save rates**. If something was flagged, you are asked to confirm.
+4. Saved rates are used on new bills straight away.
+
+**Other protections:**
+
+- The server refuses rates that cannot be right, such as 22K at ₹6,90,000 per gram. A change of more than 25% must be confirmed.
+- **Auto-refresh** (Live rate settings) only saves on its own when every rate moved 3% or less and both sources agree. Otherwise it shows a message asking you to review on Today's Rates.
+
+**Live rate settings** controls:
 
 - the source;
 - the duty %;
 - a shop premium %;
 - automatic refresh.
 
-Always check the rates before saving. Bills use the latest **saved** rates.
+The rate websites are contacted by the server laptop, never directly by the other devices.
 
 ## Activity log
 
@@ -109,6 +125,8 @@ Bills are never deleted, only cancelled. A cancelled bill puts its pieces back i
 
 - Change the `admin123` password at the first sign in (forced).
 - Give every staff member their own login. Don't share the admin login.
+- Install the shop certificate on every device that uses the app (setup page), and always use the `https://` address on other devices.
+- Records still in use cannot be deleted (customers with bills or pawn loans, items with stock, branches with users). Mark them **inactive** instead.
 - Keep Windows updated and use a Windows password on the server laptop.
 - Set a backup password (Settings > Daily backup) so backups in USB, OneDrive or Google Drive folders are encrypted. Keep the password away from the laptop.
 - Other devices can reach the app only on **Private** networks (the shop Wi-Fi), never on public Wi-Fi. Use a WPA2/WPA3 password on the shop Wi-Fi, and keep customers on a separate guest network. To lock the app to the server laptop only, see [Installation](INSTALL.html).

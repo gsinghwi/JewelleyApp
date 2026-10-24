@@ -4,7 +4,7 @@ JewelleryApp is the billing, stock, CRM, pawn (girvi) and branch software for **
 
 - One Windows laptop (the "server laptop") runs the database, which starts and stops with Windows.
 - On that laptop, open `http://localhost:8090`.
-- On any other laptop, tablet or phone on the same Wi-Fi, open `http://<server laptop IP>:8090`. **Settings > Open on other laptops / tablets** shows the exact address.
+- On any other laptop, tablet or phone on the same Wi-Fi, open `https://<server laptop IP>:8443` (after installing the shop certificate once from `http://<server laptop IP>:8090/setup`). **Settings > Open on other laptops / tablets** shows the exact address.
 
 | Guide | Read it when |
 |---|---|

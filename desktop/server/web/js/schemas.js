@@ -6,7 +6,8 @@
   const opt = (col, label) => () => DB.all(col).map((r) => ({ value: r.id, label: typeof label === 'function' ? label(r) : r[label || 'name'] }));
   const isAdmin = () => Auth.can(['Admin']);
   const isManager = () => Auth.can(['Admin', 'Manager']);
-  const usedBy = (col, key, id, what) => (DB.all(col).some((r) => r[key] === id) ? 'Cannot delete: used by ' + what : null);
+  // checks every branch (the server checks again before deleting)
+  const usedBy = (col, key, id, what) => (DB.raw(col).some((r) => r[key] === id) ? 'Cannot delete: used by ' + what + '. Make it inactive instead.' : null);
   const unique = (col, key, label) => (data, isNew, rec) => {
     const dup = DB.find(col, (r) => String(r[key]).toLowerCase() === String(data[key]).toLowerCase() && (!rec || r.id !== rec.id));
     return dup ? label + ' "' + data[key] + '" already exists' : null;
@@ -177,7 +178,8 @@
         d.gstin = (d.gstin || '').toUpperCase();
         return null;
       },
-      canDelete: (r) => (r.id === 'cus_walkin' ? 'The walk-in customer is required' : usedBy('invoices', 'customerId', r.id, 'bills')),
+      canDelete: (r) => (r.id === 'cus_walkin' ? 'The walk-in customer is required'
+        : usedBy('invoices', 'customerId', r.id, 'bills') || usedBy('receipts', 'customerId', r.id, 'receipts') || usedBy('pawns', 'customerId', r.id, 'pawn loans')),
       columns: [
         { label: 'Code', key: 'code' },
         { label: 'Name', render: (r) => '<b>' + esc(r.name) + '</b>' },
