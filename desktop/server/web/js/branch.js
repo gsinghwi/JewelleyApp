@@ -71,6 +71,8 @@
 
     // Branch where new sales, receipts and pawn loans are recorded
     workId() {
+      // head office Sales staff record their own work at head office only
+      if (Branch.isMaster() && global.Auth && !Auth.can(['Admin', 'Manager'])) return Branch.userBranchId();
       const v = Branch.viewId();
       return v === 'ALL' ? Branch.masterId() : v;
     },

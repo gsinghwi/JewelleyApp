@@ -77,11 +77,9 @@
     const refundNote = online.length ? ' ' + U.inr(U.sum(online, 'amount')) + ' was paid online: refund it from the payment gateway dashboard.' : '';
     if (!(await UI.confirm('Cancel invoice ' + inv.invoiceNo + '? Items will go back into stock.' + refundNote, 'Cancel invoice'))) return;
     online.forEach((p) => PG.link(p.gatewayRecId, { refundPending: true }));
-    inv.lines.forEach((l) => {
-      const piece = DB.get('stock', l.stockId);
-      if (piece) Object.assign(piece, { status: 'IN_STOCK', soldInvoiceId: '' });
-    });
     DB.update('invoices', inv.id, { status: 'CANCELLED', cancelledBy: Auth.user.username, cancelledAt: new Date().toISOString() });
+    // the server puts the pieces back in stock; show it straight away
+    inv.lines.forEach((l) => DB.setLocal('stock', l.stockId, { status: 'IN_STOCK', soldInvoiceId: '' }));
     UI.toast('Invoice cancelled and stock restored');
     if (onChange) onChange();
   }

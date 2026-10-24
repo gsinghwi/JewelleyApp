@@ -26,9 +26,10 @@ const (
 	ruleAdmin   = ` && @request.auth.role = "Admin"`
 
 	// Branch-owned records: master branch users see all, branch users only their own branch.
-	ruleOwnedRead   = ruleAuth + ` && (@request.auth.isMaster = true || branchId = @request.auth.branchId || branchId = "")`
-	ruleOwnedCreate = ruleAuth + ` && (@request.auth.isMaster = true || @request.body.branchId = @request.auth.branchId)`
-	ruleOwnedUpdate = ruleAuth + ` && (@request.auth.isMaster = true || (branchId = @request.auth.branchId && (@request.body.branchId:isset = false || @request.body.branchId = @request.auth.branchId)))`
+	ruleOwnedRead = ruleAuth + ` && (@request.auth.isMaster = true || branchId = @request.auth.branchId || branchId = "")`
+	// Head office Admin / Manager may work for any branch; everyone else only for their own branch.
+	ruleOwnedCreate = ruleAuth + ` && (@request.body.branchId = @request.auth.branchId || (@request.auth.isMaster = true` + ruleManager + `))`
+	ruleOwnedUpdate = ruleAuth + ` && ((branchId = @request.auth.branchId && (@request.body.branchId:isset = false || @request.body.branchId = @request.auth.branchId)) || (@request.auth.isMaster = true` + ruleManager + `))`
 	ruleOwnedDelete = ruleAuth + ruleManager + ` && (@request.auth.isMaster = true || branchId = @request.auth.branchId)`
 )
 
@@ -96,16 +97,16 @@ var specs = []Spec{
 	// ---- branch-owned business data ----
 	{Name: "customers", Title: "Customers", Owned: true, Numbered: "code", List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleOwnedUpdate, Delete: ruleOwnedDelete,
 		Columns: []Column{{"name", "name", "VARCHAR(150)"}, {"phone", "phone", "VARCHAR(20)"}, {"city", "city", "VARCHAR(80)"}, {"pan", "pan", "VARCHAR(10)"}, {"gstin", "gstin", "VARCHAR(15)"}, {"dob", "dob", "DATE"}, {"anniversary", "anniversary", "DATE"}}},
-	{Name: "stock", Title: "Stock", Owned: true, Numbered: "tagNo", List: ruleOwnedRead, Create: ruleMaster + ruleManager, Update: ruleOwnedUpdate, Delete: ruleMaster + ruleManager,
+	{Name: "stock", Title: "Stock", Owned: true, Numbered: "tagNo", List: ruleOwnedRead, Create: ruleMaster + ruleManager, Update: ruleMaster + ruleManager, Delete: ruleMaster + ruleManager,
 		Columns: []Column{{"item_id", "itemId", "VARCHAR(64)"}, {"purity_id", "purityId", "VARCHAR(64)"}, {"gross_wt", "grossWt", "DECIMAL(12,3)"}, {"net_wt", "netWt", "DECIMAL(12,3)"},
 			{"huid", "huid", "VARCHAR(6)"}, {"status", "status", "VARCHAR(10)"}, {"vendor_id", "vendorId", "VARCHAR(64)"}, {"cost_price", "costPrice", "DECIMAL(14,2)"}}},
 	{Name: "invoices", Title: "Sales invoices", Owned: true, Numbered: "invoiceNo", List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleOwnedUpdate, Delete: ruleMaster + ruleAdmin,
 		Columns: []Column{{"invoice_date", "date", "DATE"}, {"customer_id", "customerId", "VARCHAR(64)"}, {"taxable", "taxable", "DECIMAL(14,2)"}, {"cgst", "cgst", "DECIMAL(14,2)"},
 			{"sgst", "sgst", "DECIMAL(14,2)"}, {"igst", "igst", "DECIMAL(14,2)"}, {"grand_total", "grandTotal", "DECIMAL(14,2)"}, {"paid", "paid", "DECIMAL(14,2)"},
 			{"balance", "balance", "DECIMAL(14,2)"}, {"status", "status", "VARCHAR(12)"}}},
-	{Name: "receipts", Title: "Customer receipts", Owned: true, Numbered: "receiptNo", List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleOwnedUpdate, Delete: ruleMaster + ruleAdmin,
+	{Name: "receipts", Title: "Customer receipts", Owned: true, Numbered: "receiptNo", List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleMaster + ruleAdmin, Delete: ruleMaster + ruleAdmin,
 		Columns: []Column{{"customer_id", "customerId", "VARCHAR(64)"}, {"receipt_date", "date", "DATE"}, {"amount", "amount", "DECIMAL(14,2)"}, {"mode", "mode", "VARCHAR(40)"}}},
-	{Name: "pawns", Title: "Pawn loans", Owned: true, Numbered: "pawnNo", List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleOwnedUpdate, Delete: ruleMaster + ruleAdmin,
+	{Name: "pawns", Title: "Pawn loans", Owned: true, Numbered: "pawnNo", List: ruleOwnedRead, Create: ruleOwnedCreate + ruleManager, Update: ruleOwnedUpdate + ruleManager, Delete: ruleMaster + ruleAdmin,
 		Columns: []Column{{"customer_id", "customerId", "VARCHAR(64)"}, {"pawn_date", "date", "DATE"}, {"due_date", "dueDate", "DATE"}, {"principal", "principal", "DECIMAL(14,2)"},
 			{"interest_pct", "interestPct", "DECIMAL(6,3)"}, {"net_wt", "netWt", "DECIMAL(12,3)"}, {"status", "status", "VARCHAR(12)"}}},
 	{Name: "gatewayPayments", Title: "Online payments", Owned: true, List: ruleOwnedRead, Create: ruleOwnedCreate, Update: ruleOwnedUpdate, Delete: ruleMaster + ruleAdmin,
@@ -236,7 +237,8 @@ func ensureStaff(app core.App) error {
 	c.CreateRule = ptr(ruleMaster + ruleAdmin)
 	c.UpdateRule = ptr(ruleAuth + ` && (id = @request.auth.id || (@request.auth.isMaster = true` + ruleAdmin + `))`)
 	c.DeleteRule = ptr(ruleMaster + ruleAdmin)
-	c.AuthToken.Duration = 12 * 60 * 60 // a shop day
+	c.ManageRule = ptr(ruleMaster + ruleAdmin) // lets the Admin reset a forgotten password (no old password needed)
+	c.AuthToken.Duration = 12 * 60 * 60        // a shop day
 	return app.Save(c)
 }
 

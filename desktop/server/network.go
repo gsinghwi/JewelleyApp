@@ -76,10 +76,26 @@ func registerNetwork(app core.App, cfg Config) {
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		e.Router.BindFunc(func(re *core.RequestEvent) error {
 			p := re.Request.URL.Path
-			for _, pre := range localOnlyPrefixes {
-				if strings.HasPrefix(p, pre) && !isLoopback(re.Request) {
+			if !isLoopback(re.Request) {
+				for _, pre := range localOnlyPrefixes {
+					if strings.HasPrefix(p, pre) {
+						return re.ForbiddenError("Only available on the server laptop itself.", nil)
+					}
+				}
+				// the superuser account by any name or id, and any superuser token
+				if strings.HasPrefix(p, "/api/collections/") {
+					seg := strings.SplitN(strings.TrimPrefix(p, "/api/collections/"), "/", 2)[0]
+					if c, err := re.App.FindCachedCollectionByNameOrId(seg); err == nil && c.Name == core.CollectionNameSuperusers {
+						return re.ForbiddenError("Only available on the server laptop itself.", nil)
+					}
+				}
+				if re.HasSuperuserAuth() {
 					return re.ForbiddenError("Only available on the server laptop itself.", nil)
 				}
+			}
+			// a user who must change their password can do nothing else until they have
+			if re.Auth != nil && re.Auth.Collection().Name == staffCollection && re.Auth.GetBool("mustChangePassword") && !requestAllowedBeforePasswordChange(re) {
+				return re.ForbiddenError("Change your password first.", nil)
 			}
 			return re.Next()
 		})

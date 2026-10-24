@@ -297,11 +297,8 @@
           saving = false;
           el.querySelectorAll('[data-save]').forEach((b) => { b.disabled = false; });
         }
-        record.lines.forEach((l) => {
-          const s = DB.get('stock', l.stockId);
-          s.status = 'SOLD';
-          s.soldInvoiceId = record.id;
-        });
+        // the server has marked the pieces sold; show it straight away
+        record.lines.forEach((l) => DB.setLocal('stock', l.stockId, { status: 'SOLD', soldInvoiceId: record.id }));
         record.payments.forEach((p) => PG.link(p.gatewayRecId, { invoiceId: record.id, invoiceNo: record.invoiceNo, customerId: record.customerId, customerName: c.name }));
         DB.persist();
         draft = null;

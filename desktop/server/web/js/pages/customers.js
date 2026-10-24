@@ -7,7 +7,8 @@
   async function saveReceipt(customer, d) {
     d.customerId = customer.id;
     // Booked at the customer's own branch so each branch's dues and receipts stay together
-    d.branchId = customer.branchId || Branch.workId();
+    // (head office Sales record receipts at head office)
+    d.branchId = Branch.isMaster() && !Auth.can(['Admin', 'Manager']) ? Branch.userBranchId() : customer.branchId || Branch.workId();
     d.by = Auth.user.username;
     let rec;
     try {
@@ -15,17 +16,8 @@
     } catch (e) {
       return null;
     }
-    // Settle the oldest bills with a balance first so each invoice shows its current due
-    let left = d.amount;
-    DB.all('invoices').filter((i) => i.customerId === customer.id && i.status !== 'CANCELLED' && i.balance > 0)
-      .sort((a, b) => (a.date < b.date ? -1 : 1)).forEach((inv) => {
-        if (left <= 0) return;
-        const part = Math.min(left, inv.balance);
-        inv.balance = U.r2(inv.balance - part);
-        (inv.settlements = inv.settlements || []).push({ receiptNo: rec.receiptNo, date: d.date, amount: part });
-        left -= part;
-      });
-    DB.persist();
+    // the server settles the oldest bills with a balance; fetch the updated bills
+    await DB.reloadWhere('invoices', DB.pb.filter('data.customerId = {:c}', { c: customer.id }));
     UI.toast('Receipt ' + rec.receiptNo + ' saved');
     return rec;
   }

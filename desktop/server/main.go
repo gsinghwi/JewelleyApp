@@ -98,6 +98,8 @@ func newApp(cfg Config) *pocketbase.PocketBase {
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: cfg.DataDir, HideStartBanner: false})
 
 	registerHooks(app)
+	registerSecurity(app)
+	registerBusinessRules(app)
 
 	// Prepare the database before serving: collections, default data, first superuser
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{

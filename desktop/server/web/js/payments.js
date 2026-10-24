@@ -5,10 +5,11 @@
  *               checkout with test UPI IDs / cards so the whole flow can be tried safely.
  *  - RAZORPAY:  Razorpay Standard Checkout. The Key ID and Key Secret are kept on the server
  *               (Settings > Integrations); the server creates the order, checks the payment
- *               signature and captures the payment. The secret never reaches the browser.
+ *               signature, captures the payment and records it. The secret never reaches the browser.
  *  - OFF:       online payments hidden.
  *
- * Every attempt (success or failure) is stored in the 'gatewayPayments' collection.
+ * Every attempt (success or failure) is stored in the 'gatewayPayments' collection. Paid Razorpay
+ * payments are written only by the server; the app records failed attempts and test-gateway payments.
  * Card numbers, CVV and UPI PINs are never stored: only the gateway's payment ID, the method,
  * and for cards the network and last 4 digits.
  */
@@ -125,7 +126,7 @@
       try {
         await PG.loadRazorpay();
         order = await DB.api('razorpay/order', { method: 'POST', body: {
-          amount: Math.round(base.amount * 100), // paise
+          amount: base.amount, // rupees; the server converts to paise
           receipt: (base.purpose || 'Sale').slice(0, 20) + '-' + Date.now(),
           notes: { purpose: base.purpose, customer: base.customerName },
         } });
@@ -150,21 +151,25 @@
           handler: async (resp) => {
             let v;
             try {
+              // the server checks the payment with Razorpay and records it
               v = await DB.api('razorpay/verify', { method: 'POST', body: {
                 orderId: resp.razorpay_order_id, paymentId: resp.razorpay_payment_id, signature: resp.razorpay_signature,
+                branchId: Branch.workId(), purpose: base.purpose, description: base.description,
+                customerId: base.customerId, customerName: base.customerName, contact: base.contact,
               } });
             } catch (e) {
               v = { verified: false, error: DB.errorText(e) };
             }
-            const ok = v.verified && (v.status === 'captured' || v.status === 'authorized');
-            const rec = PG.save(Object.assign({}, base, {
-              status: ok ? 'captured' : 'failed', method: v.method || 'online', methodDetail: v.methodDetail || 'Razorpay checkout',
-              paymentId: resp.razorpay_payment_id, orderId: resp.razorpay_order_id || '',
-              error: ok ? '' : (v.error || 'Payment could not be verified (status: ' + (v.status || 'unknown') + ')'),
-            }));
-            if (ok) UI.toast('Payment received: ' + resp.razorpay_payment_id);
-            else UI.toast('Payment not confirmed: ' + rec.error, 'error');
-            finish(ok ? rec : null);
+            const ok = v.verified && v.record && (v.status === 'captured' || v.status === 'authorized');
+            if (!ok) {
+              const err = v.error || 'Payment could not be confirmed (status: ' + (v.status || 'unknown') + ')';
+              UI.toast('Payment not confirmed: ' + err + '. Payment ID ' + resp.razorpay_payment_id, 'error');
+              finish(null);
+              return;
+            }
+            const rec = DB.ingest('gatewayPayments', v.record);
+            UI.toast('Payment received: ' + resp.razorpay_payment_id);
+            finish(rec);
           },
           modal: { ondismiss: () => setTimeout(() => finish(null), 300) },
         });

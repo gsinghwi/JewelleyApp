@@ -285,6 +285,33 @@
 
     flush() { return this.queue; },
 
+    // A record the server created or changed itself (e.g. a payment it recorded): add it to the screen copy
+    ingest(col, r) {
+      const o = toApp(col, r);
+      const arr = this.raw(col);
+      const i = arr.findIndex((x) => x.id === o.id);
+      if (i >= 0) arr[i] = Object.assign(arr[i], o); else arr.push(o);
+      (this.snap[col] = this.snap[col] || {})[o.id] = sig(col, o);
+      return arr.find((x) => x.id === o.id);
+    },
+
+    // Show a change the server makes by itself (e.g. a piece marked sold by a bill) without sending it
+    setLocal(col, id, patch) {
+      const rec = this.raw(col).find((x) => x.id === id);
+      if (!rec) return null;
+      Object.assign(rec, patch);
+      (this.snap[col] = this.snap[col] || {})[id] = sig(col, rec);
+      return rec;
+    },
+
+    // Re-read matching records from the server (after the server changed them)
+    async reloadWhere(col, filter) {
+      try {
+        const recs = await pb.collection(col).getFullList({ filter });
+        recs.forEach((r) => this.ingest(col, r));
+      } catch (e) { /* realtime will catch up */ }
+    },
+
     async reloadRecord(col, id) {
       try {
         const r = await pb.collection(col === 'users' ? 'staff' : col).getOne(id);

@@ -22,10 +22,13 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/security"
 )
 
 var httpClient = &http.Client{Timeout: 25 * time.Second}
@@ -257,9 +260,15 @@ func registerIntegrations(app core.App) {
 
 		g.POST("/razorpay/verify", func(re *core.RequestEvent) error {
 			var body struct {
-				OrderId   string `json:"orderId"`
-				PaymentId string `json:"paymentId"`
-				Signature string `json:"signature"`
+				OrderId      string `json:"orderId"`
+				PaymentId    string `json:"paymentId"`
+				Signature    string `json:"signature"`
+				BranchId     string `json:"branchId"`
+				Purpose      string `json:"purpose"`
+				Description  string `json:"description"`
+				CustomerId   string `json:"customerId"`
+				CustomerName string `json:"customerName"`
+				Contact      string `json:"contact"`
 			}
 			if err := re.BindBody(&body); err != nil || body.OrderId == "" || body.PaymentId == "" || body.Signature == "" {
 				return re.BadRequestError("Order, payment and signature are required.", nil)
@@ -289,6 +298,16 @@ func registerIntegrations(app core.App) {
 				result["methodDetail"] = paymentDetail(pay)
 				result["amount"] = pay["amount"]
 			}
+			// The server records the payment (the app cannot create a "paid" record itself)
+			rec, err := recordGatewayPayment(re, key, body.PaymentId, body.OrderId, result, map[string]any{
+				"purpose": truncate(body.Purpose, 60), "description": truncate(body.Description, 200), "customerId": body.CustomerId,
+				"customerName": truncate(body.CustomerName, 150), "contact": truncate(body.Contact, 20),
+			}, body.BranchId)
+			if err != nil {
+				re.App.Logger().Error("razorpay: could not record payment", "payment", body.PaymentId, "error", err)
+				return re.InternalServerError("The payment was received but could not be recorded. Note payment ID "+body.PaymentId+".", nil)
+			}
+			result["record"] = rec
 			return re.JSON(http.StatusOK, result)
 		})
 		return e.Next()
@@ -329,3 +348,46 @@ func truncate(s string, n int) string {
 	}
 	return s
 }
+
+// recordGatewayPayment saves a confirmed Razorpay payment once (repeated calls return the same record)
+func recordGatewayPayment(re *core.RequestEvent, keyId, paymentId, orderId string, result map[string]any, info map[string]any, branchId string) (*core.Record, error) {
+	gatewayRecordMu.Lock()
+	defer gatewayRecordMu.Unlock()
+	if r, err := re.App.FindFirstRecordByFilter("gatewayPayments", "data.paymentId = {:p}", dbx.Params{"p": paymentId}); err == nil {
+		return r, nil
+	}
+	col, err := re.App.FindCollectionByNameOrId("gatewayPayments")
+	if err != nil {
+		return nil, err
+	}
+	// head office Admin / Manager may collect for the branch they are working in
+	branch := re.Auth.GetString("branchId")
+	if branchId != "" && branchId != branch && re.Auth.GetBool("isMaster") {
+		if r := re.Auth.GetString("role"); r == "Admin" || r == "Manager" {
+			if _, err := re.App.FindRecordById("branches", branchId); err == nil {
+				branch = branchId
+			}
+		}
+	}
+	paise, _ := result["amount"].(float64)
+	env := "live"
+	if strings.HasPrefix(keyId, "rzp_test_") {
+		env = "test"
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	d := map[string]any{
+		"gateway": "RAZORPAY", "env": env, "currency": "INR", "status": result["status"], "amount": paise / 100,
+		"method": result["method"], "methodDetail": result["methodDetail"], "paymentId": paymentId, "orderId": orderId,
+		"by": re.Auth.GetString("username"), "createdAt": now, "at": now,
+	}
+	for k, v := range info {
+		d[k] = v
+	}
+	r := core.NewRecord(col)
+	r.Id = "gwp_" + security.RandomStringWithAlphabet(14, "abcdefghijklmnopqrstuvwxyz0123456789")
+	r.Set("branchId", branch)
+	r.Set("data", d)
+	return r, re.App.Save(r)
+}
+
+var gatewayRecordMu sync.Mutex
