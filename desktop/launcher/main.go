@@ -1,5 +1,6 @@
-// JewelleryApp.exe: opens the app in its own window (Microsoft Edge or Chrome "app" mode, no
-// address bar) once the JewelleryApp Database service answers. Built with -H=windowsgui.
+// JewelleryApp.exe: the desktop / Start menu shortcut. Waits until the JewelleryApp Database
+// service answers, then opens http://localhost:8090 in the default web browser.
+// (Other devices on the Wi-Fi just open http://<laptop IP>:8090 in their browser.) Built with -H=windowsgui.
 package main
 
 import (
@@ -7,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,13 +27,13 @@ func exeDir() string {
 
 // appURL reads the address from jewellery.json (written by the installer next to both programs)
 func appURL() string {
-	cfg := config{HttpAddr: "127.0.0.1:8090"}
+	cfg := config{HttpAddr: "0.0.0.0:8090"}
 	if raw, err := os.ReadFile(filepath.Join(exeDir(), "jewellery.json")); err == nil {
 		_ = json.Unmarshal(raw, &cfg)
 	}
 	addr := cfg.HttpAddr
-	if strings.HasPrefix(addr, "0.0.0.0") || strings.HasPrefix(addr, ":") {
-		addr = "127.0.0.1" + addr[strings.Index(addr, ":"):]
+	if strings.HasPrefix(addr, "0.0.0.0") || strings.HasPrefix(addr, ":") || strings.HasPrefix(addr, "127.0.0.1") {
+		addr = "localhost" + addr[strings.LastIndex(addr, ":"):]
 	}
 	return "http://" + addr
 }
@@ -46,20 +46,6 @@ func healthy(url string) bool {
 	}
 	res.Body.Close()
 	return res.StatusCode == http.StatusOK
-}
-
-func browsers() []string {
-	var list []string
-	for _, env := range []string{"ProgramFiles(x86)", "ProgramFiles", "LocalAppData"} {
-		base := os.Getenv(env)
-		if base == "" {
-			continue
-		}
-		list = append(list,
-			filepath.Join(base, "Microsoft", "Edge", "Application", "msedge.exe"),
-			filepath.Join(base, "Google", "Chrome", "Application", "chrome.exe"))
-	}
-	return list
 }
 
 func main() {
@@ -81,18 +67,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	profile := filepath.Join(os.Getenv("LocalAppData"), "JewelleryApp", "window")
-	for _, b := range browsers() {
-		if _, err := os.Stat(b); err != nil {
-			continue
-		}
-		cmd := exec.Command(b, "--app="+url, "--user-data-dir="+profile, "--no-first-run",
-			"--no-default-browser-check", "--window-size=1366,860", "--disable-features=Translate")
-		if err := cmd.Start(); err == nil {
-			return
-		}
-	}
-	// No Edge / Chrome found: use the default browser
 	if err := openDefault(url); err != nil {
 		messageBox("JewelleryApp", fmt.Sprintf("Open this address in your browser:\n\n%s", url), false)
 	}

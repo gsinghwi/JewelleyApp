@@ -38,7 +38,7 @@ var webFS embed.FS
 
 // Config is read from jewellery.json next to the executable (created by the installer).
 type Config struct {
-	HttpAddr string `json:"httpAddr"` // 127.0.0.1:8090 = this laptop only; 0.0.0.0:8090 = also other devices on the shop Wi-Fi
+	HttpAddr string `json:"httpAddr"` // 0.0.0.0:8090 = this laptop and other devices on the shop Wi-Fi; 127.0.0.1:8090 = this laptop only
 	DataDir  string `json:"dataDir"`
 }
 
@@ -60,7 +60,7 @@ func defaultDataDir() string {
 }
 
 func loadConfig() Config {
-	cfg := Config{HttpAddr: "127.0.0.1:8090", DataDir: defaultDataDir()}
+	cfg := Config{HttpAddr: "0.0.0.0:8090", DataDir: defaultDataDir()}
 	if raw, err := os.ReadFile(filepath.Join(exeDir(), "jewellery.json")); err == nil {
 		_ = json.Unmarshal(raw, &cfg)
 	}
@@ -113,8 +113,9 @@ func newApp(cfg Config) *pocketbase.PocketBase {
 	registerBackups(app)
 	registerIntegrations(app)
 	registerExportRoutes(app)
+	registerNetwork(app, cfg)
 
-	// The JewelleryApp UI, served at http://127.0.0.1:8090/
+	// The JewelleryApp UI, served at http://<laptop>:8090/
 	app.OnServe().Bind(&hook.Handler[*core.ServeEvent]{
 		Priority: 999,
 		Func: func(e *core.ServeEvent) error {

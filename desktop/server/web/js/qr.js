@@ -259,7 +259,7 @@
           }
         } catch (e) { detector = null; }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          msg('Camera is not available here. Open the app over https (e.g. the GitHub Pages link) or use "Scan from a photo".', 'warn-text');
+          msg('The browser only allows the live camera on the server laptop itself (http://localhost:8090). On this device use "Scan from a photo" or a USB barcode / QR scanner (it types the tag into the scan box).', 'warn-text');
           return;
         }
         try {

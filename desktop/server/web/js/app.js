@@ -192,8 +192,8 @@
       await DB.loadPublicSettings();
       await DB.api('health');
     } catch (e) {
-      root.innerHTML = '<div class="boot"><div class="boot-box"><h2>Cannot reach the database</h2><p class="muted">The JewelleryApp database service is not running on this computer, or the network is down.</p>' +
-        '<p class="muted small">On the server laptop: open Services and start "JewelleryApp Database", or restart the laptop.</p><button class="btn primary" onclick="location.reload()">Try again</button></div></div>';
+      root.innerHTML = '<div class="boot"><div class="boot-box"><h2>Cannot reach the database</h2><p class="muted">The server laptop may be switched off or asleep, the JewelleryApp Database service may be stopped, or this device is not on the shop Wi-Fi.</p>' +
+        '<p class="muted small">On the server laptop: open Services and start "JewelleryApp Database", or restart the laptop. On another device: check it is on the same Wi-Fi as the server laptop.</p><button class="btn primary" onclick="location.reload()">Try again</button></div></div>';
       return;
     }
     applyTheme();

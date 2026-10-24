@@ -36,7 +36,7 @@ Every sign in lasts 12 hours. Then the app asks for the password again.
 The installer creates an emergency database account:
 
 1. On the server laptop, open `<data folder>\pb_data\superuser-login.txt` (for example `C:\ProgramData\JewelleryApp\pb_data\superuser-login.txt`) as administrator. It contains an email and password.
-2. Open `http://127.0.0.1:8090/_/` in a browser on that laptop and sign in with them.
+2. Open `http://localhost:8090/_/` in a browser **on the server laptop** and sign in with them. This page is refused from other devices.
 3. Open the **staff** collection, then the `admin` record. Set a new password (enter it twice) and tick **mustChangePassword**. Save.
 4. Sign in to JewelleryApp with the new password.
 
@@ -88,4 +88,4 @@ Always check the rates before saving. Bills use the latest **saved** rates.
 - Give every staff member their own login. Don't share the admin login.
 - Keep Windows updated and use a Windows password on the server laptop.
 - Keep backups private: they contain all customer data and the payment / WhatsApp keys.
-- Keep the database on `127.0.0.1` (this laptop only) unless you need other devices. In that case, follow the steps in [Installation](INSTALL.html) for the private shop network only.
+- Other devices can reach the app only on **Private** networks (the shop Wi-Fi), never on public Wi-Fi. Use a WPA2/WPA3 password on the shop Wi-Fi, and keep customers on a separate guest network. To lock the app to the server laptop only, see [Installation](INSTALL.html).

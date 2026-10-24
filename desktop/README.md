@@ -2,11 +2,17 @@
 
 The production version of JewelleryApp for **Nisarg Jewellers**: the same screens as the online prototype, backed by a real database that runs on the shop laptop.
 
+It is a **browser application**:
+
+- The installer sets up the database and web server on one Windows laptop, as a service that starts with Windows.
+- On that laptop, use `http://localhost:8090`.
+- Other laptops, tablets and phones on the same Wi-Fi use `http://<laptop IP>:8090`, shown in **Settings**. Nothing is installed on them.
+
 | Part | What it is |
 |---|---|
 | `server/` | `jewellery-server.exe`: a custom [PocketBase](https://pocketbase.io) (Go + SQLite) build with the JewelleryApp schema, access rules, document numbering, daily backups, WhatsApp / Razorpay integration, MySQL export and Windows service support. The web app (`server/web/`) is embedded in the exe. |
-| `launcher/` | `JewelleryApp.exe`: opens the app in its own Edge / Chrome window once the database is up |
-| `installer/` | NSIS script that installs both programs, registers the auto-start **JewelleryApp Database** service and adds shortcuts |
+| `launcher/` | `JewelleryApp.exe`: the desktop shortcut; waits for the database, then opens `http://localhost:8090` in the default browser |
+| `installer/` | NSIS script that installs both programs, registers the auto-start **JewelleryApp Database** service, opens port 8090 for private networks and adds shortcuts |
 | `docs/` | User and admin guides, also installed with the app (Start menu > JewelleryApp > User guide and setup) |
 | `tools/make-seed.js` | Regenerates `server/seed/default-data.json` (default master data) from the prototype's `js/seed.js` |
 
@@ -32,8 +38,8 @@ VERSION=1.0.0 ./build.sh      # -> build/JewelleryApp-Setup-1.0.0.exe
 
 ```
 cd desktop/server
-JEWELLERY_DATA_DIR=./pb_data JEWELLERY_HTTP=127.0.0.1:8090 go run .
-# open http://127.0.0.1:8090 and sign in with admin / admin123
+JEWELLERY_DATA_DIR=./pb_data go run .      # listens on 0.0.0.0:8090
+# open http://localhost:8090 (or http://<this machine's IP>:8090 from another device), sign in with admin / admin123
 ```
 
 `jewellery-server` commands:
@@ -54,4 +60,5 @@ Each collection keeps the app record as JSON (`data`), plus indexed `branchId` a
 
 - **Branch isolation:** server-side API rules make sure branch users can only read and write their own branch's records.
 - **Document numbers:** invoices, receipts, pawn tickets, purchases, transfers, stock tags and customer codes are assigned by the server, per branch and financial year. No duplicates even with several counters billing at once.
+- **Network:** the server listens on all network cards (`0.0.0.0:8090`; set `httpAddr` in `jewellery.json` to `127.0.0.1:8090` for this laptop only). The PocketBase admin UI and superuser APIs only answer requests from the laptop itself.
 - **Secrets:** Razorpay and WhatsApp keys are kept in a superuser-only collection and used only by the server.

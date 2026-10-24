@@ -3,7 +3,9 @@
 ;
 ; Installs the programs in Program Files, keeps the data in a folder you choose
 ; (default C:\ProgramData\JewelleryApp), registers the "JewelleryApp Database" Windows service
-; (starts automatically with Windows, stopped cleanly at shutdown) and adds shortcuts.
+; (starts automatically with Windows, stopped cleanly at shutdown), opens port 8090 in the Windows
+; firewall for private networks (so other laptops on the shop Wi-Fi can use the app in their
+; browser) and adds shortcuts.
 ; Uninstalling removes the programs and the service but KEEPS the data and backups.
 
 Unicode true
@@ -42,7 +44,7 @@ Var DataDir
 !define MUI_UNICON "jewelleryapp.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Install ${APP} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "This installs the JewelleryApp billing, stock, CRM and pawn software and its database on this laptop.$\r$\n$\r$\nThe database runs as a Windows service: it starts by itself when the laptop starts and stops safely at shutdown. A backup is taken every day.$\r$\n$\r$\nFirst sign in: username admin, password admin123 (you will be asked to change it)."
+!define MUI_WELCOMEPAGE_TEXT "This installs the JewelleryApp billing, stock, CRM and pawn software and its database on this laptop.$\r$\n$\r$\nJewelleryApp is used in a web browser (Chrome or Edge): on this laptop at http://localhost:8090, and on other laptops on the same Wi-Fi at http://<this laptop's IP>:8090.$\r$\n$\r$\nThe database starts by itself with the laptop and stops safely at shutdown. A backup is taken every day.$\r$\n$\r$\nFirst sign in: username admin, password admin123 (you will be asked to change it)."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 
@@ -56,7 +58,7 @@ Var DataDir
 
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_FINISHPAGE_RUN "$INSTDIR\JewelleryApp.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "Open JewelleryApp now"
+!define MUI_FINISHPAGE_RUN_TEXT "Open JewelleryApp in the browser now"
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\docs\MASTER-DATA.html"
 !define MUI_FINISHPAGE_SHOWREADME_TEXT "Show the master data setup guide"
 !insertmacro MUI_PAGE_FINISH
@@ -98,8 +100,12 @@ Section "JewelleryApp" SecMain
 
   CreateDirectory "$DataDir"
   CreateDirectory "$DataDir\backups"
-  ; jewellery.json: data folder and address (this laptop only; see docs to allow other devices)
-  nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" config --data-dir "$DataDir\pb_data" --http 127.0.0.1:8090'
+  ; jewellery.json: data folder and address (all network cards: this laptop and the shop Wi-Fi)
+  nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" config --data-dir "$DataDir\pb_data" --http 0.0.0.0:8090'
+
+  ; let other devices on PRIVATE (home / work) networks reach port 8090; public Wi-Fi stays blocked
+  nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="JewelleryApp"'
+  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="JewelleryApp" description="JewelleryApp in the browser on the shop network" dir=in action=allow protocol=TCP localport=8090 profile=private,domain'
 
   DetailPrint "Registering the JewelleryApp Database service..."
   nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" service install'
@@ -140,6 +146,7 @@ Section "Uninstall"
   nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" service stop'
   Sleep 2000
   nsExec::ExecToLog '"$INSTDIR\jewellery-server.exe" service uninstall'
+  nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="JewelleryApp"'
 
   Delete "$DESKTOP\JewelleryApp.lnk"
   RMDir /r "$SMPROGRAMS\${APP}"

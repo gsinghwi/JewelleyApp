@@ -74,6 +74,7 @@
         '</div>' +
         '<div class="sticky-save"><button class="btn primary" data-save>Save settings</button></div>' +
         '<section class="card"><div class="card-head"><h3>Users &amp; roles</h3><small class="muted">Admin: everything &middot; Manager: all except settings &amp; users &middot; Sales: billing, customers, stock view</small></div><div class="users-crud"></div></section>' +
+        '<section class="card"><div class="card-head"><h3>Open on other laptops / tablets</h3></div><div class="net-box"><p class="muted">Loading...</p></div></section>' +
         '<section class="card"><div class="card-head"><h3>Razorpay keys</h3><small class="muted">Kept on the server only; the secret is never shown again</small></div><div class="rzp-keys"><p class="muted">Loading...</p></div></section>' +
         '<section class="card"><div class="card-head"><h3>Daily backup</h3></div>' +
         '<p class="muted">The database is backed up automatically every day at the time below (and on the next start if the laptop was off). Save settings after changing the folder or time.</p>' +
@@ -154,6 +155,18 @@
       });
       DB.api('integrations').then((r) => renderKeys(r.razorpay || {}))
         .catch((ex) => { keysBox.innerHTML = '<p class="muted">Could not load: ' + esc(DB.errorText(ex)) + '</p>'; });
+
+      // ---- Network address for other devices ----
+      DB.api('network').then((n) => {
+        const urls = n.urls || [];
+        el.querySelector('.net-box').innerHTML = !n.lanEnabled
+          ? '<p>Only this laptop can open JewelleryApp (address <code>' + esc(n.listen) + '</code>). To allow other devices on the shop Wi-Fi, see the Installation guide.</p>'
+          : '<p>Any laptop, tablet or phone on the <b>same Wi-Fi</b> can open JewelleryApp in Chrome or Edge at:</p>' +
+            (urls.length ? '<ul class="net-urls">' + urls.map((u) => '<li><a href="' + esc(u) + '" target="_blank"><b>' + esc(u) + '</b></a></li>').join('') + '</ul>'
+              : '<p class="muted">This laptop is not connected to a network right now.</p>') +
+            (n.byName ? '<p class="muted small">Also usually works: <code>' + esc(n.byName) + '</code> &middot; on this laptop: <code>' + esc(n.local) + '</code></p>' : '') +
+            '<p class="muted small">Each person signs in with their own username. Ask your router admin to give this laptop a fixed (reserved) IP so the address does not change, and set the Wi-Fi to <b>Private</b> in Windows network settings.</p>';
+      }).catch((ex) => { el.querySelector('.net-box').innerHTML = '<p class="muted">' + esc(DB.errorText(ex)) + '</p>'; });
 
       // ---- Backups ----
       const statusBox = el.querySelector('.backup-status');
