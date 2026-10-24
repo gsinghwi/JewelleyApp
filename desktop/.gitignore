@@ -1,0 +1,5 @@
+build/
+server/server
+server/jewellery-server
+server/pb_data/
+*.exe

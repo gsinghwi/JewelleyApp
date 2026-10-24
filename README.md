@@ -12,6 +12,8 @@ A working prototype of a shop-management app for an Indian jewellery store movin
 - Reports
 - A login page with the shop's own branding
 
+> **Desktop app for the shop:** the production version, with a real database that starts and stops with Windows, daily backups, a Windows installer and the setup guides, is in [`desktop/`](desktop/README.md). The files at the top level are the browser prototype.
+
 ## Run it
 
 There's no install or build step. Open `index.html` in Chrome, Edge or Firefox. You can also serve the folder:
@@ -187,6 +189,9 @@ There are two sending modes, chosen under WhatsApp → WhatsApp settings:
 The app runs only while it is open, so birthday wishes are not sent on their own on a schedule. Open the WhatsApp screen (or the dashboard reminder) each day. Fully automatic daily sending needs a small server; see the next steps below.
 
 ## Prototype limits and next steps
+
+The [desktop app](desktop/README.md) removes the first three limits: shared server database, server-enforced branch access and server-side sign in.
+
 
 - **Branches need shared storage to work across locations.** In this prototype each device keeps its own copy, so the branch separation can be tried fully on one device, but sales at a branch's own computer will not reach head office until the data moves to a shared database. The access filter also runs in the browser; on a server it must be enforced by the backend as well.
 - **Storage:** data is kept in the browser (`localStorage`) on the computer where the app is used. Take regular backups (Settings → Download backup). To share data across counters or branches, replace `js/db.js` with calls to a backend API and database (for example Node or Django with PostgreSQL). All screens go through `DB`, so nothing else needs to change.

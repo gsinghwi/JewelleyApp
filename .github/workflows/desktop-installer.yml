@@ -1,0 +1,55 @@
+# Builds the Windows installer for the desktop app (desktop/).
+# - Every push to main that changes desktop/: the installer is attached to the run as an artifact.
+# - Pushing a tag like desktop-v1.0.0: also published as a GitHub Release with the installer.
+name: Desktop installer
+
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/desktop-installer.yml']
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/server/go.mod
+          cache-dependency-path: desktop/server/go.sum
+
+      - name: Install NSIS and pandoc
+        run: sudo apt-get update && sudo apt-get install -y nsis pandoc
+
+      - name: Server checks
+        working-directory: desktop/server
+        run: go vet ./... && go build ./...
+
+      - name: Build installer
+        working-directory: desktop
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then VERSION="${GITHUB_REF_NAME#desktop-v}"; else VERSION="1.0.0"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$VERSION" ./build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JewelleryApp-Setup-${{ env.VERSION }}
+          path: desktop/build/JewelleryApp-Setup-*.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: JewelleryApp ${{ env.VERSION }}
+          files: desktop/build/JewelleryApp-Setup-*.exe
+          body: |
+            Windows installer for JewelleryApp ${{ env.VERSION }}.
+            Download `JewelleryApp-Setup-${{ env.VERSION }}.exe`, run it on the shop laptop, then sign in with admin / admin123 (you must change the password).
+            Guides: https://github.com/${{ github.repository }}/tree/main/desktop/docs
