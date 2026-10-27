@@ -2,6 +2,7 @@
 (function (global) {
   'use strict';
   const esc = U.esc;
+  const LOCATIONS = ['Counter 1', 'Counter 2', 'Counter 3', 'Locker', 'Display Window', 'Repair / Karigar'];
 
   const itemOptions = () => DB.all('items').filter((i) => i.active !== false)
     .sort((a, b) => (a.code < b.code ? -1 : 1)).map((i) => ({ value: i.id, label: i.code + ' - ' + i.name }));
@@ -26,7 +27,7 @@
       { name: 'size', label: 'Size / length' },
       { name: 'vendorId', label: 'Vendor', type: 'select', options: () => DB.all('vendors').map((v) => ({ value: v.id, label: v.name })) },
       { name: 'costPrice', label: 'Purchase cost (₹)', type: 'number', min: 0 },
-      { name: 'location', label: 'Location', type: 'select', options: ['Counter 1', 'Counter 2', 'Counter 3', 'Locker', 'Display Window', 'Repair / Karigar'] },
+      { name: 'location', label: 'Location', type: 'select', options: LOCATIONS },
       { name: 'receivedOn', label: 'Received on', type: 'date' },
     ];
   }
@@ -109,7 +110,7 @@
         '<button class="btn" data-transfers>Transfers</button>' +
         (canEdit ? '<button class="btn" data-transfer>Transfer to branch</button>' : '') +
         '<button class="btn" data-print>Print QR stickers</button>' +
-        (canEdit ? '<a class="btn" href="#/purchases?new=1">Purchase entry</a><button class="btn primary" data-add>+ Add piece</button>' : '') +
+        (canEdit ? '<a class="btn" href="#/purchases?new=1">Purchase entry</a><button class="btn" data-bulk>Bulk upload (Excel)</button><button class="btn primary" data-add>+ Add piece</button>' : '') +
         '</div><div class="stock-summary"></div><div class="stock-body"></div></section>';
 
       function filtered() {
@@ -181,6 +182,8 @@
       });
       const add = el.querySelector('[data-add]');
       if (add) add.addEventListener('click', () => openPiece(null, draw));
+      const bulk = el.querySelector('[data-bulk]');
+      if (bulk) bulk.addEventListener('click', () => StockImport.open(draw));
       el.querySelector('.stock-body').addEventListener('click', async (e) => {
         const sel = e.target.closest('[data-sel]');
         if (sel) { if (sel.checked) selected.add(sel.dataset.sel); else selected.delete(sel.dataset.sel); draw(); return; }
@@ -293,5 +296,5 @@
     });
   }
 
-  global.StockUI = { openPiece, validatePiece, transferDialog, transferHistory };
+  global.StockUI = { openPiece, validatePiece, transferDialog, transferHistory, LOCATIONS };
 })(window);

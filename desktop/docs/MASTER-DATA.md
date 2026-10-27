@@ -172,7 +172,32 @@ Serials restart each financial year (April to March) for each branch. You can ty
 
 ## Entering opening stock
 
-The fastest way to enter the pieces already in the shop:
+### Bulk upload from Excel (fastest for many pieces)
+
+1. Open **Stock > Bulk upload (Excel)**. Only Admin or Manager users at the head office see this button.
+2. Under **1. Download the template**, choose:
+   - the category (or all categories);
+   - how many rows you want for each item;
+   - optionally the vendor, location and received date.
+
+   Then click **Download Excel template**.
+3. Open the file in Excel. Each row is one piece and is already filled from the item master: item code and name, purity, quantity 1, stone weight 0, the hallmark charge, making type, making value and wastage, vendor, location and date.
+4. Fill in the yellow cells:
+   - **Gross weight** (or **Fixed price / MRP** for fixed price items).
+   - **Tag no.** Leave it blank to get the next automatic tag, or type your existing barcode.
+
+   Net weight is worked out as gross minus stone weight. For pieces with stones, add the stone weight, HUID, stone details and value. Purity, making type, vendor and location have drop-down lists.
+5. Copy a row to add more pieces of the same item. Rows with no tag, weight, HUID or price are skipped, so unused rows can stay in the file.
+6. Save the file. Under **2. Upload the filled file**, upload the .xlsx (a CSV also works).
+7. The app checks every row before adding anything.
+   - If there are problems, it lists them by Excel row and adds **nothing**. Problems include a wrong item code, a weight that is not a number, an unknown purity or vendor, a duplicate tag or HUID, or stone weight more than gross weight. Fix those rows and upload again.
+   - If every row is correct, it shows the pieces with total gross and net weight. Click **Add N piece(s) to stock**.
+
+The pieces are added to the head office as in stock. You can then print QR stickers and send them to branches. Making, wastage and charges that match the item's defaults stay linked to the item, so a later change to the item still applies.
+
+### Opening stock as a purchase
+
+To record the opening stock as a purchase, with a vendor bill and payment:
 
 1. **Vendors**: add a vendor called `Opening Stock`.
 2. **Purchases > New purchase**: choose that vendor, today's date and paid = total. Add one row per piece: item, purity, gross and net weight, stone weight and value, HUID and cost.
